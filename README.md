@@ -14,19 +14,11 @@
 
 ---
 
- 🚀 Demo
-<img width="654" height="849" alt="image" src="https://github.com/user-attachments/assets/e4d1435b-209b-4f8f-aeed-8589d3f83f4e" />
-<img width="727" height="741" alt="image" src="https://github.com/user-attachments/assets/4f82342b-d7bb-443a-91f1-88431f56d4f3" />
-<img width="735" height="456" alt="image" src="https://github.com/user-attachments/assets/754476ef-848c-4294-b325-8043236798a2" />
-<img width="808" height="658" alt="image" src="https://github.com/user-attachments/assets/4cd456a5-7ce2-4964-a64f-860171e12c4d" />
-
-
-
 🛠️ Tech Stack
 - HTML5 + CSS3 + JavaScript (Vanilla)
 - [AI API Provider] — e.g., DeepSeek / OpenAI
 - LocalStorage for data persistence
-
+---
  📦 Installation
 ```bash
 # Clone the repository
@@ -37,30 +29,49 @@ cd stepforward-demo
 
 # Open index.html in browser
 # Or use Live Server for better experience
-
-
+```
+---
 🔑 Configuration
 Get your API Key from [DeepSeek/OpenAI/etc.]
+
 Open the app and click the settings icon
+
 Enter your API Key and select the model
+
 Start using the app!
+
 ⚠️ Your API Key is stored locally in your browser and never sent to any server.
 
+---
 📖 Usage
+
 Enter a task (e.g., "Write a blog post about AI")
+
 AI will break it down into small steps
+
 Work through each step
+
 Stuck? Click "Hold On" to chat with AI psychologist
+
 Review your emotional dialogue history anytime
 
+---
 🔒 Privacy
+
 All data is stored in your browser's LocalStorage
+
 No data is transmitted to any third-party server
+
 Your API Key is only used to make direct calls to the AI API
+
 You have complete control over your data
 
+---
 🤝 Contributing
+
 Contributions are welcome! Feel free to open an issue or submit a PR.
 
+---
 📄 License
+
 MIT License — feel free to use, modify, and distribute.
