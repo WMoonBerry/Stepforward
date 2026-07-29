@@ -2,7 +2,7 @@
 
 > Break down any task into micro-steps. Stuck? Chat with AI psychologist. All data local.
 
-\---
+---
 
 ✨ Features
 
@@ -12,7 +12,7 @@
 * **Privacy First** — All data stored locally in your browser
 * **Your API Key** — Use your own AI API key, full control over your data and usage
 
-\---
+---
 
 🛠️ Tech Stack
 
@@ -20,7 +20,7 @@
 * \[AI API Provider] — e.g., DeepSeek / OpenAI
 * LocalStorage for data persistence
 
-\---
+---
 
 📦 Installation
 
@@ -35,7 +35,7 @@ cd stepforward-demo
 # Or use Live Server for better experience
 ```
 
-\---
+---
 
 🔑 Configuration
 Get your API Key from \[DeepSeek/OpenAI/etc.]
@@ -48,7 +48,7 @@ Start using the app!
 
 ⚠️ Your API Key is stored locally in your browser and never sent to any server.
 
-\---
+---
 
 📖 Usage
 
@@ -62,7 +62,7 @@ Stuck? Click "Hold On" to chat with AI psychologist
 
 Review your emotional dialogue history anytime
 
-\---
+---
 
 🔒 Privacy
 
@@ -74,13 +74,13 @@ Your API Key is only used to make direct calls to the AI API
 
 You have complete control over your data
 
-\---
+---
 
 🤝 Contributing
 
 Contributions are welcome! Feel free to open an issue or submit a PR.
 
-\---
+---
 
 📄 License
 
