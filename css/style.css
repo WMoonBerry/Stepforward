@@ -850,6 +850,10 @@ body::before {
   100% { background-position: -200% 0; }
 }
 
+/* ===== 夸奖弹窗安全网 ===== */
+.praise-overlay { pointer-events: auto; }
+.praise-overlay.removing { pointer-events: none; }
+
 /* ===== 复制按钮 ===== */
 .copy-btn {
   padding: 6px 12px;

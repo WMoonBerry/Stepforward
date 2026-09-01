@@ -1,0 +1,178 @@
+/* ===== 吉祥物容器 ===== */
+.mascot-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+.mascot-container-sm {
+  padding: 4px;
+  gap: 6px;
+}
+.mascot-svg {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  color: var(--accent2);
+  transform-origin: center bottom;
+}
+.mascot-container-sm .mascot-svg {
+  width: 32px;
+  height: 32px;
+}
+.mascot-loading-text {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ===== 猫猫动画 ===== */
+.mascot-cat {
+  animation: mascot-cat-bounce 1.2s ease-in-out infinite;
+}
+.mascot-cat .mascot-tail {
+  transform-origin: 44px 36px;
+  animation: mascot-tail-wag 1.5s ease-in-out infinite;
+}
+@keyframes mascot-cat-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(-5px) rotate(-2deg); }
+  60% { transform: translateY(-2px) rotate(1.5deg); }
+}
+@keyframes mascot-tail-wag {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(12deg); }
+}
+
+/* ===== 狗狗动画 ===== */
+.mascot-dog {
+  animation: mascot-dog-wiggle 1.4s ease-in-out infinite;
+}
+.mascot-dog .mascot-tail {
+  transform-origin: 44px 40px;
+  animation: mascot-dog-tail 0.8s ease-in-out infinite;
+}
+@keyframes mascot-dog-wiggle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-2deg); }
+  75% { transform: translateY(-3px) rotate(2deg); }
+}
+@keyframes mascot-dog-tail {
+  0%, 100% { transform: rotate(-15deg); }
+  50% { transform: rotate(20deg); }
+}
+
+/* ===== 兔兔动画 ===== */
+.mascot-rabbit {
+  animation: mascot-rabbit-hop 1.5s ease-in-out infinite;
+}
+.mascot-rabbit .mascot-ear-l {
+  transform-origin: 26px 20px;
+  animation: mascot-ear-sway-l 1.8s ease-in-out infinite;
+}
+.mascot-rabbit .mascot-ear-r {
+  transform-origin: 38px 20px;
+  animation: mascot-ear-sway-r 1.8s ease-in-out infinite;
+}
+@keyframes mascot-rabbit-hop {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+  60% { transform: translateY(-4px); }
+}
+@keyframes mascot-ear-sway-l {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-8deg); }
+}
+@keyframes mascot-ear-sway-r {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(8deg); }
+}
+
+/* ===== 小机器人动画 ===== */
+.mascot-robot {
+  animation: mascot-robot-tilt 2s ease-in-out infinite;
+}
+.mascot-robot .mascot-wheel {
+  transform-origin: center;
+  animation: mascot-wheel-spin 1.5s linear infinite;
+}
+.mascot-robot .mascot-antenna {
+  animation: mascot-antenna-blink 1s ease-in-out infinite;
+}
+@keyframes mascot-robot-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-1.5deg); }
+  75% { transform: rotate(1.5deg); }
+}
+@keyframes mascot-wheel-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes mascot-antenna-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ===== 小考拉动画 ===== */
+.mascot-koala {
+  animation: mascot-koala-sway 2.5s ease-in-out infinite;
+}
+.mascot-koala .mascot-arm-l,
+.mascot-koala .mascot-arm-r {
+  animation: mascot-koala-hug 2.5s ease-in-out infinite;
+}
+@keyframes mascot-koala-sway {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes mascot-koala-hug {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+
+/* ===== 设置页吉祥物选择器 ===== */
+.mascot-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg2);
+}
+.mascot-option:hover {
+  border-color: var(--accent-soft);
+}
+.mascot-option-active {
+  border-color: var(--accent2);
+  background: var(--accent2-soft);
+}
+.mascot-option .mascot-svg {
+  width: 32px;
+  height: 32px;
+}
+.mascot-option-label {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.mascot-option-active .mascot-option-label {
+  color: var(--accent2);
+}
+
+/* ===== 暗色模式适配 ===== */
+[data-theme="dark"] .mascot-svg {
+  color: var(--accent);
+}
+[data-theme="dark"] .mascot-loading-text {
+  color: var(--muted);
+}
+
+/* ===== 睡前仪式暗色背景下的吉祥物 ===== */
+.bedtime-modal .mascot-svg {
+  color: #c9a87c;
+}
+.bedtime-modal .mascot-loading-text {
+  color: #8a7f75;
+}

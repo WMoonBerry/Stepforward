@@ -1,88 +1,147 @@
-# StepForward · Move Forward Step by Step
+# StepForward · 步步向前
 
-> Break down any task into micro-steps. Stuck? Chat with AI psychologist. All data local.
+> **一个温暖的 AI 任务拆解与成长陪伴工具** — 输入任何让你感到压力的大任务，AI 会帮你拆成"不可能完不成"的小步骤，全程温柔陪伴你一步步完成；还能记录成长日记、在睡前安心入睡。
 
----
+_An AI-powered task breakdown & growth companion — type any overwhelming task, and it becomes small, doable steps. With emotional support, growth diary, and bedtime rituals._
 
-✨ Features
-
-* **Task Breakdown** — Enter any task, AI splits it into clear, achievable micro-steps
-* **"Hold On" Support** — Stuck on a step? Chat with an AI psychologist for emotional support
-* **Emotion Review** — Review past conversations and track your emotional journey
-* **Privacy First** — All data stored locally in your browser
-* **Your API Key** — Use your own AI API key, full control over your data and usage
+> 🚀 **在线体验（无需配置，打开即用）**：_[点击这里访问 Netlify 演示链接](https://your-netlify-url.netlify.app)_
 
 ---
 
-🛠️ Tech Stack
+## ✨ 功能亮点
 
-* HTML5 + CSS3 + JavaScript (Vanilla)
-* \[AI API Provider] — e.g., DeepSeek / OpenAI
-* LocalStorage for data persistence
+### 🧩 智能任务拆解
+输入任何任务，AI 自动拆成清晰的小步骤并按时间排期。能准确识别"明天下午3点""下周三之前"等自然语言日期，自动安排到对应日期，绝不搞错。
 
----
+### 💬 情绪陪伴
+随时开启情绪对话，AI 按情绪等级（1-4 级）分级回应——从不给空话套话，而是真正"接住"你的情绪。关键安全边界：检测到自伤/自杀表述时立即提供 24 小时心理援助热线。
 
-📦 Installation
+### 📖 成长日记
+完成任务自动记录，也可手写日记，AI 给出温暖回应。睡前仪式的点滴记录也会自动保存到这里，一点点看见自己的成长。
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/stepforward-demo.git
+### 🌙 睡前安心仪式
+四步流程：回顾今日 → 小确幸选择题 → 放下焦虑 → 晚安语，陪你安心入睡。记录自动融入成长日记，日积月累。
 
-# Navigate to project folder
-cd stepforward-demo
+### 🎉 完成庆祝
+每完成一步有小小的 ✨ 动画，完成整件事有大礼花 🎉 + AI 夸夸官的热情夸奖，让每一次前进都被看见。
 
-# Open index.html in browser
-# Or use Live Server for better experience
-```
+### 🧭 新手引导
+渐进式 10 步导览，气泡可拖动、自动避开屏幕边缘、不会误弹键盘。前几步由你的真实操作驱动，上手零门槛。
 
----
+### 🤖 用户画像（AI 越用越懂你）
+追踪你的行为模式（完成率、拖延倾向、情绪触发），注入 AI 回应，让它越来越贴合你的节奏，却不机械地提及数据。
 
-🔑 Configuration
-Get your API Key from \[DeepSeek/OpenAI/etc.]
-
-Open the app and click the settings icon
-
-Enter your API Key and select the model
-
-Start using the app!
-
-⚠️ Your API Key is stored locally in your browser and never sent to any server.
+### 🍚 智能安排
+自动避开用餐时间，用番茄工作法智能插入休息间隔，把任务排得既高效又符合你的生活节奏。
 
 ---
 
-📖 Usage
+## 📸 产品使用截图
 
-Enter a task (e.g., "Write a blog post about AI")
+> 图为演示引导场景，帮助你理解产品的使用路径。**若你想亲手体验，点击上方"在线体验"链接即可。**
 
-AI will break it down into small steps
+### 1. 开屏欢迎页
+![开屏欢迎页](docs/screenshots/01-welcome.png)
 
-Work through each step
+带有昵称的温暖开场问候，第一秒就让人感到被欢迎。
 
-Stuck? Click "Hold On" to chat with AI psychologist
+### 2. 任务拆解的前后对比
+![任务拆解](docs/screenshots/02-breakdown.png)
 
-Review your emotional dialogue history anytime
+输入"写项目周报 +下午3点前交"，AI 立即拆成按时间排好的小步骤——"大任务 → 小步骤"的对比一目了然。
+
+### 3. 完成步骤后的夸夸时刻
+![完成庆祝](docs/screenshots/03-praise.png)
+
+点击 ✓ 标记完成，流式逐字弹出的温暖肯定，每一次前进都被温柔看见。
+
+### 4. 情绪陪伴对话
+![情绪陪伴](docs/screenshots/04-emotion.png)
+
+无论"累了"还是"崩溃了"，AI 都先接住情绪再给方法，按你的当下状态分级回应。
+
+### 5. 成长日记
+![成长日记](docs/screenshots/05-diary.png)
+
+任务记录、手写日记、睡前仪式三种卡片混排，看见每一天真实的积累。
+
+### 6. 睡前安心仪式 · 小确幸选择
+![睡前仪式](docs/screenshots/06-bedtime.png)
+
+睡前仪式四步流程中，AI 生成的 5 个小确幸选项，陪你把一天慢慢地放下来。
+
+> **截图拍摄建议**：用手机 Chrome 打开链接截图，背景保持干净；每张截图在 README 里加圆角边框和浅阴影会更有质感。你也可以把第 2 张做成"输入前 / 拆解后"两张并排的对比图，视觉冲击力更强。
 
 ---
 
-🔒 Privacy
+## 🚀 在线体验
 
-All data is stored in your browser's LocalStorage
+- **演示地址**：_https://your-netlify-url.netlify.app_（打开即用，无需配置 API Key）
+- **本地运行**：直接双击 `index.html` 或在本地起一个静态服务器即可
 
-No data is transmitted to any third-party server
-
-Your API Key is only used to make direct calls to the AI API
-
-You have complete control over your data
+> 演示模式下 Web 安全代理自动生效，API Key 不会暴露在前端。你也可以在本地配置自己的 AI Key 使用完整功能。
 
 ---
 
-🤝 Contributing
+## 🗺️ 版本时间线
 
-Contributions are welcome! Feel free to open an issue or submit a PR.
+| 版本 | 日期 | 主要内容 |
+|------|------|---------|
+| v1.0 | 2026-07-20 | MVP：任务拆解 → 完成/暂停 → 情绪干预 |
+| v2.0 | 2026-07-22 | 主界面重构、多角色 AI、清单分类、语音/音频、角色自定义 |
+| v2.0.4 | 2026-07-30 | 流式输出、跨日排期、用户画像、情绪分级 + 危机安全边界 |
+| v2.1 | 2026-07-30 | 骨架屏加载、情绪对话一键复制、手动改日期、跨事件时间联动 |
+| v2.2.0 | 2026-08-15 | 成长日记 AI 回应、睡前安心仪式、任务安排缓冲机制 |
+| v2.2.1 | 2026-08-15 | 10 步新手引导、Netlify 部署、API Key 代理保护 |
+| v2.2.2~v2.2.3 | 2026-09-01 | 引导体验优化：气泡可拖动、定位修复、键盘不自动唤起 |
+
+> 详细版本改动见 [`ROADMAP.md`](./ROADMAP.md)。
 
 ---
 
-📄 License
+## 🔮 下一步：后端架构升级
 
-MIT License — feel free to use, modify, and distribute.
+当前版本是**纯前端应用**，AI 调用通过 Netlify Functions 代理完成，安全且零门槛。下一阶段将进行**完整的后端架构升级**，已规划并部分开始实施：
 
+### Phase 1 · 后端核心（已完成 ✅）
+- Vercel Serverless 后端：`/api/chat` 流式接口、6 大 AI 服务商路由、额度管理
+- 双模式 AI 调用：**官方体验模式**（免费额度）+ **BYOK**（自带 Key）
+- System Prompt 与服务商路由已迁移至后端，前端不再暴露核心逻辑
+
+### Phase 2 · 前端架构重构（进行中 🔄）
+- 数据层统一管理（`storage.js` 中央入口，为后续数据迁移做准备）
+- 双模式选择界面 + API Key 脱敏存储（sessionStorage）
+- 流式输出中断恢复、超时检测、一键重试
+
+### Phase 3 · 多用户与数据持久化（规划中）
+- 用户认证系统（OAuth / 邮箱注册）
+- IndexedDB → 云端数据库迁移
+- 多设备数据同步
+
+### Phase 4 · 能力扩展（规划中）
+- 多语言支持（i18n）
+- 埋点分析 + 北极星指标
+- PWA 离线支持
+
+> 完整技术路线图见 [`Stepforward_demo_with_backend/`](./Stepforward_demo_with_backend) 目录。
+
+---
+
+## 🛠️ 技术栈
+
+**前端**：纯 HTML + CSS + JavaScript (ES Module) · 无框架依赖 · 移动端自适应
+**AI**：DeepSeek Flash API · 流式 SSE 输出
+**部署**：Netlify（前端 + Netlify Functions 代理）
+**后端（即将升级）**：Vercel Serverless · Vercel KV · 多服务商统一路由
+
+---
+
+## 💡 为什么做这个产品
+
+很多人面对任务的不是"能力不够"，而是"被一个大任务压得喘不过气，不知从哪开始"。StepForward 在做的，就是把"不可能"变成"一小步"，并在这个过程里持续地、温柔地陪着人走下去——因为每一次小小的前进，都值得被看见、被庆祝。
+
+---
+
+## 📄 License
+
+本项目用于个人作品展示与学习交流。

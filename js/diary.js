@@ -87,8 +87,8 @@ async function saveDiaryWithResponse(content, mood, editId) {
   }
   
   saveData(data);
-  
-  // 异步生成AI回应
+
+  // 异步生成AI回应（显示吉祥物加载指示）
   generateDiaryResponse(entry).then(response => {
     if (response) {
       entry.aiResponse = response;
@@ -100,6 +100,11 @@ async function saveDiaryWithResponse(content, mood, editId) {
       }
     }
   });
+
+  // 如果日记弹窗正打开，立即显示加载状态
+  if (document.getElementById('diaryModal')?.classList.contains('show')) {
+    renderDiaryList();
+  }
   
   return entry;
 }
@@ -490,7 +495,7 @@ async function showBedtimeGoodnight() {
       <h3 style="color:#c9a87c;margin-bottom:16px;">🌙 晚安</h3>
       
       <div id="goodnightLoading" style="text-align:center;padding:40px;">
-        <div class="spinner" style="margin:0 auto 16px;width:24px;height:24px;border:2px solid rgba(255,255,255,0.1);border-top-color:#c9a87c;border-radius:50%;animation:spin 1s linear infinite;"></div>
+        <div style="display:flex;justify-content:center;margin-bottom:12px;">${getMascotSVG(getCurrentMascot())}</div>
         <p style="font-size:13px;color:#8a7f75;">正在为你写下温柔的晚安...</p>
       </div>
       

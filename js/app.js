@@ -55,14 +55,15 @@ function getSettings() {
       lunchStart: '12:00', lunchDuration: 90,
       dinnerStart: '18:00', dinnerDuration: 90,
       theme: 'default', themeMode: 'system',
-      diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true
+      diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true,
+      mascot: 'cat'
     };
     const settings = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
     console.log('[getSettings] 读取设置完成，userName:', settings.userName || '(未设置)');
     return settings;
   } catch (e) {
     console.warn('[getSettings] 读取设置失败，返回默认值:', e);
-    return { userName: '', autoReschedule: true, workStart: 9, workEnd: 18, remindIntensity: 'standard', soundEnabled: true, voiceEnabled: true, personaAge: '', personaGender: '', personaStyle: '', personaRelation: '', lunchStart: '12:00', lunchDuration: 90, dinnerStart: '18:00', dinnerDuration: 90, theme: 'default', themeMode: 'system', diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true };
+    return { userName: '', autoReschedule: true, workStart: 9, workEnd: 18, remindIntensity: 'standard', soundEnabled: true, voiceEnabled: true, personaAge: '', personaGender: '', personaStyle: '', personaRelation: '', lunchStart: '12:00', lunchDuration: 90, dinnerStart: '18:00', dinnerDuration: 90, theme: 'default', themeMode: 'system', diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true, mascot: 'cat' };
   }
 }
 
@@ -540,8 +541,8 @@ function saveBreakdownResult(parsed) {
   updateCounters();
   scheduleReminders();
 
-  // 30秒缓冲后再渲染任务卡片
-  showTaskBufferMessage(5, () => {
+  // 缓冲后再渲染任务卡片
+  showTaskBufferMessage(2, () => {
     renderNextTask();
   });
 
@@ -564,12 +565,13 @@ function showTaskBufferMessage(seconds, callback) {
     if (callback) callback();
     return;
   }
-  
-  // 显示缓冲消息
+
+  // 显示缓冲消息（吉祥物 + 倒计时）
   const bufferDiv = document.createElement('div');
   bufferDiv.id = 'taskBufferMessage';
-  bufferDiv.style.cssText = 'padding:30px 20px;text-align:center;background:linear-gradient(135deg,var(--warm-bg),var(--bg));border-radius:14px;margin-bottom:16px;';
+  bufferDiv.style.cssText = 'padding:24px 20px;text-align:center;background:linear-gradient(135deg,var(--warm-bg),var(--bg));border-radius:14px;margin-bottom:16px;';
   bufferDiv.innerHTML = `
+    <div style="display:flex;justify-content:center;margin-bottom:12px;">${getMascotSVG(getCurrentMascot())}</div>
     <div style="font-size:16px;color:var(--accent2);font-weight:600;margin-bottom:8px;">
       卡片将在 <span id="bufferCountdown">${seconds}</span> 秒后提醒
     </div>
@@ -577,10 +579,10 @@ function showTaskBufferMessage(seconds, callback) {
       我会一直在这里和你一起，加油 ~
     </div>
   `;
-  
+
   container.innerHTML = '';
   container.appendChild(bufferDiv);
-  
+
   // 倒计时
   let remaining = seconds;
   const countdownEl = document.getElementById('bufferCountdown');
@@ -1889,14 +1891,16 @@ function showPraise(message, autoCloseSeconds) {
   if (!autoCloseSeconds) autoCloseSeconds = 0;
   console.log('[showPraise] 显示夸奖弹窗，autoCloseSeconds:', autoCloseSeconds);
   var overlay = document.createElement('div');
+  overlay.className = 'praise-overlay';
+  overlay.dataset.created = Date.now().toString();
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;display:flex;align-items:center;justify-content:center;';
 
   var card = document.createElement('div');
   card.style.cssText = 'background:linear-gradient(135deg, #fff9e6 0%, #ffe4ec 100%);padding:32px 28px;border-radius:20px;max-width:360px;margin:20px;text-align:center;box-shadow:0 10px 40px rgba(255,150,180,0.3);border:2px solid #ffd6e0;';
 
   var hintText = autoCloseSeconds > 0
-    ? `<div style="margin-top:18px;font-size:11px;color:#c9a0b0;opacity:0.8;">${autoCloseSeconds}秒后自动关闭 · 点击任意处继续</div>`
-    : `<div style="margin-top:18px;font-size:11px;color:#c9a0b0;opacity:0.8;">点击任意处继续</div>`;
+    ? `<div style="margin-top:18px;font-size:11px;color:#c9a0b0;opacity:0.8;">${autoCloseSeconds}秒后自动关闭 · 点击任意处关闭本次弹窗</div>`
+    : `<div style="margin-top:18px;font-size:11px;color:#c9a0b0;opacity:0.8;">点击任意处关闭本次弹窗</div>`;
 
   card.innerHTML = `
     <div style="font-size:48px;margin-bottom:12px;">🌟</div>
@@ -1928,6 +1932,8 @@ function showPraise(message, autoCloseSeconds) {
 function showPraiseStream(onClose) {
   console.log('[showPraiseStream] 创建流式夸奖弹窗');
   var overlay = document.createElement('div');
+  overlay.className = 'praise-overlay';
+  overlay.dataset.created = Date.now().toString();
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;display:flex;align-items:center;justify-content:center;';
 
   var card = document.createElement('div');
@@ -1935,11 +1941,11 @@ function showPraiseStream(onClose) {
 
   var contentDiv = document.createElement('div');
   contentDiv.style.cssText = 'font-size:15px;line-height:1.9;color:#5a3d4a;white-space:pre-wrap;font-weight:500;min-height:40px;';
-  contentDiv.innerHTML = '<span style="opacity:0.5;">正在准备对你说…</span>';
+  contentDiv.innerHTML = `<div style="display:flex;align-items:center;gap:8px;justify-content:center;opacity:0.8;">${getMascotSmallHTML('正在准备对你说…')}</div>`;
 
   var hintDiv = document.createElement('div');
-  hintDiv.style.cssText = 'margin-top:18px;font-size:11px;color:#c9a0b0;opacity:0.8;';
-  hintDiv.textContent = '点击任意处继续';
+  hintDiv.style.cssText = 'margin-top:18px;font-size:11px;color:#c9a0b0;opacity:0.8;display:none;';
+  hintDiv.textContent = '点击任意处关闭本次弹窗';
 
   card.appendChild(contentDiv);
   card.appendChild(hintDiv);
@@ -1954,14 +1960,20 @@ function showPraiseStream(onClose) {
     if (onClose) onClose();
   };
 
-  overlay.onclick = close;
-  card.onclick = function(e) { e.stopPropagation(); close(); };
+  overlay.onclick = null;
+  card.onclick = null;
 
+  var hintShown = false;
   return {
     update: function(fullText) {
       if (closed) return;
-      // 实时渲染 Markdown
       contentDiv.innerHTML = md(fullText);
+      if (!hintShown) {
+        hintShown = true;
+        hintDiv.style.display = 'block';
+        overlay.onclick = close;
+        card.onclick = function(e) { e.stopPropagation(); close(); };
+      }
     },
     close: close,
     isClosed: function() { return closed; }
@@ -3162,6 +3174,8 @@ function openSettings() {
   // 渲染夜间模式选择器
   const themeModePicker = $('#themeModePicker');
   if (themeModePicker) renderThemeModePicker(themeModePicker, s.themeMode || 'system');
+  // 渲染吉祥物选择器
+  if (typeof renderMascotPicker === 'function') renderMascotPicker();
   $('#settingsModal').classList.add('show');
 }
 
@@ -3277,7 +3291,7 @@ function showLoading(text) {
   const id = 'loading-' + Date.now();
   const card = createEl('div', 'loading-card');
   card.id = id;
-  card.innerHTML = `<div class="spinner"></div><div class="loading-text">${text}</div>`;
+  card.innerHTML = getMascotLoadingHTML(text);
   $('#nextTaskContainer').insertBefore(card, $('#nextTaskContainer').firstChild);
   return id;
 }
@@ -3295,7 +3309,7 @@ function hideLoading(id) { const el = document.getElementById(id); if (el) el.re
  */
 function showLoadingBubble(container) {
   const bubble = createEl('div', 'chat-bubble ai');
-  bubble.innerHTML = `<span class="speaker">StepForward</span><span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid var(--accent-soft);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px;"></span>思考中...`;
+  bubble.innerHTML = `<span class="speaker">StepForward</span>${getMascotSmallHTML('思考中...')}`;
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
   return bubble;
@@ -3816,10 +3830,19 @@ function startOverlayWatchdog() {
   if (window._overlayWatchdogTimer) return; // 防止重复启动
   window._overlayWatchdogTimer = setInterval(() => {
     const now = Date.now();
+    // 清理残留隐形 modal-overlay（超过 10 秒未显示）
     document.querySelectorAll('.modal-overlay:not(.show)').forEach(ov => {
       const created = parseInt(ov.dataset.created || '0', 10);
       if (created && now - created > 10000) {
         console.warn('[overlayWatchdog] 清理残留隐形弹窗:', ov);
+        ov.remove();
+      }
+    });
+    // 清理残留 praise-overlay（超过 35 秒未关闭，30秒自动关闭+5秒余量）
+    document.querySelectorAll('.praise-overlay').forEach(ov => {
+      const created = parseInt(ov.dataset.created || '0', 10);
+      if (created && now - created > 35000) {
+        console.warn('[overlayWatchdog] 清理残留夸奖弹窗:', ov);
         ov.remove();
       }
     });
@@ -3980,7 +4003,7 @@ function renderDiaryList() {
           ${d.type === 'manual' ? `<button class="diary-edit" data-id="${d.id}" title="编辑" style="border:none;background:none;cursor:pointer;color:var(--muted);font-size:13px;">✏️</button>` : ''}
         </div>
         <div class="diary-item-content">${md(d.text || d.content || '')}</div>
-        ${d.aiResponse ? `<div class="diary-ai-response"><span class="diary-ai-icon">🌱</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div>` : ''}
+        ${d.aiResponse ? `<div class="diary-ai-response"><span class="diary-ai-icon">🌱</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div>` : (d.respondedAt === null && d.timestamp && (Date.now() - new Date(d.timestamp).getTime() < 60000) ? `<div class="diary-ai-response"><div style="display:flex;align-items:center;gap:6px;">${getMascotSmallHTML('正在回应你...')}</div></div>` : '')}
       </div>`;
     });
     html += `</div>`;
