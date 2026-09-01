@@ -318,26 +318,29 @@ function renderStep(index) {
     }
   }
 
+  // 先把遮罩设为可见（仍 opacity:0 不可见、不拦截点击），再定位——
+  // 否则气泡量到 0×0，空间计算与边界夹取全部失效，弹出时就飘出屏幕
+  overlay.style.display = 'block';
+
   // 先滚动高亮目标（即时滚动，确保位置计算准确）
   highlightTarget(step.target, step);
 
-  // 定位气泡（智能定位）
+  // 定位气泡（智能定位，基于真实尺寸 + 视口夹取可视框）
   positionTooltipSmart(step, tooltip);
 
   // 启用拖动（标题栏可拖，支持鼠标+触摸，有边界限制）
   makeTooltipDraggable(tooltip);
 
-  // 显示遮罩
-  overlay.style.display = 'block';
-  setTimeout(() => overlay.classList.add('show'), 10);
+  // 触发淡入；同一帧再校准一次位置，防字体/布局延迟导致尺寸漂移
+  requestAnimationFrame(() => {
+    overlay.classList.add('show');
+    positionTooltipSmart(step, tooltip);
+  });
 
-  // 如果有预填内容，预填输入框
+  // 如果有预填内容，仅填入不聚焦——避免移动端自动唤起键盘、压缩视口
   if (step.prefill && index === 0) {
     const input = document.getElementById('taskInput');
-    if (input) {
-      input.value = step.prefill;
-      input.focus();
-    }
+    if (input) input.value = step.prefill;
   }
 }
 
@@ -555,51 +558,50 @@ function positionTooltipSmart(step, tooltip) {
 
 /**
  * 按指定方向定位气泡
+ * 直接以「左上角坐标」定位并做视口夹取，不依赖 transform 偏移——
+ * 旧实现用 translate(-50%,-100%) 之类偏移，却只夹取锚点 left/top，
+ * transform 会把整个可视框推出屏幕（尤其 top 方向被顶到负坐标）。
  * @param {string} position - 位置方向：top | bottom | left | right
  * @param {DOMRect} targetRect - 目标元素位置
  * @param {HTMLElement} tooltip - 气泡元素
  * @param {number} padding - 间距
  */
 function positionAtDirection(position, targetRect, tooltip, padding) {
-  let left, top;
+  const w = tooltip.offsetWidth;
+  const h = tooltip.offsetHeight;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 12;
 
+  // 先算出气泡左上角的期望位置（让它贴在目标元素的对应方向）
+  let left, top;
   switch (position) {
     case 'top':
-      left = targetRect.left + targetRect.width / 2;
-      top = targetRect.top - padding - 10;
-      tooltip.style.transform = 'translate(-50%, -100%)';
+      left = targetRect.left + targetRect.width / 2 - w / 2;
+      top = targetRect.top - padding - h;
       break;
     case 'bottom':
-      left = targetRect.left + targetRect.width / 2;
+      left = targetRect.left + targetRect.width / 2 - w / 2;
       top = targetRect.bottom + padding;
-      tooltip.style.transform = 'translate(-50%, 0)';
       break;
     case 'left':
-      left = targetRect.left - padding;
-      top = targetRect.top + targetRect.height / 2;
-      tooltip.style.transform = 'translate(-100%, -50%)';
+      left = targetRect.left - padding - w;
+      top = targetRect.top + targetRect.height / 2 - h / 2;
       break;
     case 'right':
       left = targetRect.right + padding;
-      top = targetRect.top + targetRect.height / 2;
-      tooltip.style.transform = 'translate(0, -50%)';
+      top = targetRect.top + targetRect.height / 2 - h / 2;
       break;
     default:
-      left = targetRect.left + targetRect.width / 2;
+      left = targetRect.left + targetRect.width / 2 - w / 2;
       top = targetRect.bottom + padding;
-      tooltip.style.transform = 'translate(-50%, 0)';
   }
 
-  // 边界处理
-  const tooltipRect = tooltip.getBoundingClientRect();
-  const maxX = window.innerWidth - tooltipRect.width - 20;
-  const maxY = window.innerHeight - tooltipRect.height - 20;
+  // 视口夹取：保证整个气泡都在屏幕内（夹取可视框，而非锚点）
+  left = Math.max(margin, Math.min(left, vw - w - margin));
+  top = Math.max(margin, Math.min(top, vh - h - margin));
 
-  if (left < 20) left = 20;
-  if (left > maxX) left = maxX;
-  if (top < 20) top = 20;
-  if (top > maxY) top = maxY;
-
+  tooltip.style.transform = 'none';
   tooltip.style.left = left + 'px';
   tooltip.style.top = top + 'px';
 }

@@ -2270,6 +2270,89 @@ async function exportAllEmotionHistory() {
 }
 
 /**
+ * 将所有成长日记格式化为文本（按日期分组）
+ * @returns {string} 格式化后的文本
+ */
+function formatAllDiaryForCopy() {
+  const diary = getSortedDiary();
+  if (diary.length === 0) return '';
+
+  // 按日期分组（getSortedDiary 已是日期倒序）
+  const groups = {};
+  diary.forEach(d => {
+    const key = d.date || '未知日期';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(d);
+  });
+
+  let text = '';
+  const dates = Object.keys(groups);
+  dates.forEach((dateStr, dIdx) => {
+    const dateLabel = formatDateLabel(dateStr);
+    text += `===== ${dateStr}（${dateLabel}）=====\n\n`;
+
+    groups[dateStr].forEach((entry, eIdx) => {
+      const timeStr = entry.timestamp ? formatTime(new Date(entry.timestamp)) : '';
+      const meta = DIARY_TYPE_META[entry.type] || DIARY_TYPE_META.manual;
+
+      if (entry.type === 'achievement') {
+        text += `${meta.icon} ${meta.label} · ${timeStr}\n`;
+        text += `${entry.text || ''}\n`;
+
+      } else if (entry.type === 'manual') {
+        const moodTag = entry.mood ? ` · ${entry.mood}` : '';
+        text += `${meta.icon} ${meta.label}${moodTag} · ${timeStr}\n`;
+        text += `--- 我的日记 ---\n${entry.text || ''}\n`;
+        if (entry.aiResponse) {
+          text += `--- AI 的回应 ---\n${entry.aiResponse}\n`;
+        }
+
+      } else if (entry.type === 'bedtime') {
+        text += `${meta.icon} ${meta.label} · ${timeStr}\n`;
+        if (entry.review && entry.review.length > 0) {
+          text += `--- 今日回顾 ---\n`;
+          entry.review.forEach((r, i) => { text += `${i + 1}. ${r}\n`; });
+        }
+        if (entry.gratitudes && entry.gratitudes.length > 0) {
+          text += `--- 小确幸 ---\n`;
+          entry.gratitudes.forEach((g, i) => { text += `${i + 1}. ${g}\n`; });
+        }
+        if (entry.anxietySaved && entry.anxietyText) {
+          text += `--- 放下的焦虑 ---\n${entry.anxietyText}\n`;
+        }
+        if (entry.goodnightMessage) {
+          text += `--- 晚安语 ---\n${entry.goodnightMessage}\n`;
+        }
+      }
+
+      if (eIdx < groups[dateStr].length - 1) text += '\n';
+    });
+
+    if (dIdx < dates.length - 1) text += '\n\n';
+  });
+
+  return text.trim();
+}
+
+/**
+ * 一键复制所有成长日记到剪贴板
+ */
+async function exportAllDiaryHistory() {
+  const diary = getSortedDiary();
+  if (diary.length === 0) {
+    showToast('暂无日记记录', 'info');
+    return;
+  }
+  const text = formatAllDiaryForCopy();
+  const success = await copyToClipboard(text);
+  if (success) {
+    showToast(`已复制 ${diary.length} 条日记记录`, 'success');
+  } else {
+    showToast('复制失败，请手动选择文本复制', 'error');
+  }
+}
+
+/**
  * 显示陪伴回顾弹窗（只读，按时间倒序展示每次会话）
  * @param {number|string} taskId - 步骤 ID
  */
@@ -3710,6 +3793,9 @@ function init() {
   }
   if ($('#exportAllEmotionBtn')) {
     $('#exportAllEmotionBtn').onclick = exportAllEmotionHistory;
+  }
+  if ($('#exportAllDiaryBtn')) {
+    $('#exportAllDiaryBtn').onclick = exportAllDiaryHistory;
   }
 
   // 情绪陪伴输入框（始终存在）
