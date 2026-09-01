@@ -1,0 +1,45 @@
+/* ============================================================
+   春意盎然 · Spring Sprouts
+   情绪：生长、平衡、清新、希望
+   ============================================================ */
+
+[data-theme="spring"] {
+  --sf-bg-page: #F6FAF5;
+  --sf-bg-surface: #FFFFFF;
+  --sf-bg-warm: #EEF6EB;
+  --sf-bg-calm: #E3F0EC;
+
+  --sf-ink-primary: #344036;
+  --sf-ink-secondary: #728B74;
+
+  --sf-border: #D9E5D6;
+  --sf-overlay: rgba(52, 64, 54, 0.42);
+
+  --sf-accent-primary: #6A9C72;
+  --sf-accent-secondary: #9BC48B;
+  --sf-accent-tertiary: #7FB3A1;
+
+  --sf-warning: #D9A65C;
+  --sf-error: #C96B6B;
+  --sf-success: #6A9C72;
+
+  --sf-accent-soft: rgba(106, 156, 114, 0.12);
+  --sf-accent2-soft: rgba(155, 196, 139, 0.12);
+  --sf-accent3-soft: rgba(127, 179, 161, 0.12);
+
+  /* 兼容层 */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent: var(--sf-accent-primary);
+  --accent2: var(--sf-accent-secondary);
+  --accent3: var(--sf-accent-tertiary);
+  --warn: var(--sf-warning);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

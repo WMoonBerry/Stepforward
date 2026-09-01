@@ -1,0 +1,45 @@
+/* ============================================================
+   蔚蓝海洋 · Mediterranean Blue
+   情绪：开阔、明亮、信任、度假感
+   ============================================================ */
+
+[data-theme="mediterranean"] {
+  --sf-bg-page: #F8FAFC;
+  --sf-bg-surface: #FFFFFF;
+  --sf-bg-warm: #EDF6FA;
+  --sf-bg-calm: #E6F4F1;
+
+  --sf-ink-primary: #2C3E50;
+  --sf-ink-secondary: #6B8BA4;
+
+  --sf-border: #D6E3EC;
+  --sf-overlay: rgba(44, 62, 80, 0.42);
+
+  --sf-accent-primary: #2E86AB;
+  --sf-accent-secondary: #5BA8C4;
+  --sf-accent-tertiary: #4A9B8C;
+
+  --sf-warning: #E8A243;
+  --sf-error: #D96C6C;
+  --sf-success: #4A9B8C;
+
+  --sf-accent-soft: rgba(46, 134, 171, 0.12);
+  --sf-accent2-soft: rgba(91, 168, 196, 0.12);
+  --sf-accent3-soft: rgba(74, 155, 140, 0.12);
+
+  /* 兼容层 */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent: var(--sf-accent-primary);
+  --accent2: var(--sf-accent-secondary);
+  --accent3: var(--sf-accent-tertiary);
+  --warn: var(--sf-warning);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

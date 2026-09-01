@@ -1,0 +1,45 @@
+/* ============================================================
+   极地冰川 · Polar Glacier
+   情绪：通透、呼吸、冷静、空间感
+   ============================================================ */
+
+[data-theme="polar"] {
+  --sf-bg-page: #F5FAFB;
+  --sf-bg-surface: #FFFFFF;
+  --sf-bg-warm: #E8F6F8;
+  --sf-bg-calm: #DDF0F4;
+
+  --sf-ink-primary: #2D3A3D;
+  --sf-ink-secondary: #6C8A90;
+
+  --sf-border: #D7EBEF;
+  --sf-overlay: rgba(45, 58, 61, 0.40);
+
+  --sf-accent-primary: #29B6C8;
+  --sf-accent-secondary: #7BD4E0;
+  --sf-accent-tertiary: #5FA8B8;
+
+  --sf-warning: #E8A85C;
+  --sf-error: #C96B6B;
+  --sf-success: #5FA8B8;
+
+  --sf-accent-soft: rgba(41, 182, 200, 0.12);
+  --sf-accent2-soft: rgba(123, 212, 224, 0.12);
+  --sf-accent3-soft: rgba(95, 168, 184, 0.12);
+
+  /* 兼容层 */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent: var(--sf-accent-primary);
+  --accent2: var(--sf-accent-secondary);
+  --accent3: var(--sf-accent-tertiary);
+  --warn: var(--sf-warning);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

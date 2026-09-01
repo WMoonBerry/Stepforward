@@ -4,22 +4,7 @@
    ============================================================ */
 
 /* ===== 设计变量 ===== */
-:root {
-  --bg: #FAF7F2;
-  --bg2: #fff;
-  --ink: #3D3530;
-  --muted: #8A7F75;
-  --rule: #E5DDD2;
-  --accent: #c98b6b;       /* 暖橙色 */
-  --accent2: #8B6F8E;       /* 紫灰色 */
-  --accent3: #6B8E8B;       /* 青绿色 */
-  --warn: #e0a458;
-  --accent-soft: rgba(201, 139, 107, 0.12);
-  --accent2-soft: rgba(139, 111, 142, 0.12);
-  --accent3-soft: rgba(107, 142, 139, 0.12);
-  --warm-bg: #fdf6ef;
-  --calm-bg: #eaf3ee;
-}
+/* 语义层 + 兼容层由 themes/tokens-base.css 提供，此处不再重复定义 */
 
 /* ===== 基础重置 ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,8 +23,8 @@ body::before {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background:
-    radial-gradient(ellipse 50% 30% at 90% 0%, rgba(201, 139, 107, 0.05) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 25% at 10% 100%, rgba(139, 111, 142, 0.05) 0%, transparent 70%);
+    radial-gradient(ellipse 50% 30% at 90% 0%, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 25% at 10% 100%, color-mix(in srgb, var(--accent2) 5%, transparent) 0%, transparent 70%);
   z-index: -1;
   pointer-events: none;
 }
@@ -174,7 +159,7 @@ body::before {
   transition: all 0.2s;
 }
 .task-item:hover {
-  box-shadow: 0 4px 16px rgba(61, 53, 48, 0.06);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--ink) 6%, transparent);
 }
 .task-item.done {
   opacity: 0.5;
@@ -236,7 +221,7 @@ body::before {
 }
 .task-btn.done-btn:hover { background: var(--accent3); color: #fff; }
 .task-btn.wait-btn {
-  background: rgba(224, 164, 88, 0.15);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
   color: var(--warn);
 }
 .task-btn.wait-btn:hover { background: var(--warn); color: #fff; }
@@ -245,7 +230,7 @@ body::before {
 .loading-card {
   padding: 20px;
   background: var(--warm-bg);
-  border: 1px solid rgba(201, 139, 107, 0.2);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
   border-radius: 12px;
   text-align: center;
   margin-bottom: 8px;
@@ -371,7 +356,7 @@ body::before {
   width: 100%;
   max-width: 480px;
   padding: 12px 20px;
-  background: rgba(250, 247, 242, 0.95);
+  background: color-mix(in srgb, var(--bg) 95%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--rule);
   display: flex;
@@ -391,7 +376,7 @@ body::before {
   background: linear-gradient(135deg, var(--accent), var(--accent2));
   color: #fff;
 }
-.action-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(201, 139, 107, 0.3); }
+.action-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); }
 .action-btn.secondary {
   background: var(--bg2);
   color: var(--ink);
@@ -428,7 +413,7 @@ body::before {
   background: var(--warm-bg);
   border-radius: 16px;
   padding: 24px;
-  border: 1px solid rgba(201, 139, 107, 0.2);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .api-config h3 {
   font-size: 18px;
@@ -482,7 +467,7 @@ body::before {
   cursor: pointer;
   transition: all 0.2s;
 }
-.api-save:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(201, 139, 107, 0.3); }
+.api-save:hover { transform: translateY(-1px); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); }
 .api-save:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .privacy-note {
@@ -511,14 +496,14 @@ body::before {
   text-align: center;
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
-.toast.error { background: #e74c3c; }
+.toast.error { background: var(--sf-error); }
 .toast.success { background: var(--accent3); }
 
 /* ===== 模态框 ===== */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(61, 53, 48, 0.5);
+  background: var(--sf-overlay);
   backdrop-filter: blur(4px);
   z-index: 1000;
   display: none;
@@ -527,6 +512,9 @@ body::before {
   padding: 20px;
 }
 .modal-overlay.show { display: flex; }
+/* 防冻结安全网：未显示（无 .show 类）的弹窗永不拦截点击，
+   根治"隐形遮罩挡住全页面点击"导致的按钮失灵 */
+.modal-overlay:not(.show) { pointer-events: none; }
 .modal {
   background: var(--bg);
   border-radius: 16px;
@@ -620,12 +608,12 @@ body::before {
 
 /* ===== 下一个待办卡片 ===== */
 .next-task-card {
-  background: linear-gradient(135deg, #fff 0%, #fdf8f3 100%);
+  background: linear-gradient(135deg, var(--bg2) 0%, var(--bg) 100%);
   border: 1px solid var(--rule);
   border-radius: 16px;
   padding: 20px;
   margin-top: 12px;
-  box-shadow: 0 4px 20px rgba(61, 53, 48, 0.06);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--ink) 6%, transparent);
 }
 .next-task-header {
   display: flex;
@@ -667,7 +655,7 @@ body::before {
 .action-btn:hover { transform: translateY(-1px); }
 .action-btn:active { transform: translateY(0); }
 .action-btn.primary {
-  background: linear-gradient(135deg, var(--accent3), #4a7a77);
+  background: linear-gradient(135deg, var(--accent3), color-mix(in srgb, var(--accent3) 70%, black));
   color: #fff;
   flex: 1;
 }
@@ -685,9 +673,9 @@ body::before {
   min-width: 44px;
 }
 .action-btn.danger {
-  background: rgba(231, 76, 60, 0.1);
-  color: #e74c3c;
-  border: 1px solid rgba(231, 76, 60, 0.2);
+  background: color-mix(in srgb, var(--sf-error) 10%, transparent);
+  color: var(--sf-error);
+  border: 1px solid color-mix(in srgb, var(--sf-error) 20%, transparent);
 }
 
 /* ===== 加载卡片 ===== */
@@ -735,7 +723,7 @@ body::before {
   font-size: 12.5px !important;
 }
 .action-btn.celebrate {
-  background: linear-gradient(135deg, #f5a623, #e74c3c) !important;
+  background: linear-gradient(135deg, var(--warn), var(--accent)) !important;
   color: #fff !important;
   border: none !important;
 }
@@ -752,7 +740,7 @@ body::before {
   transition: background 0.2s ease;
 }
 .list-event-header:hover {
-  background: rgba(201, 139, 107, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 /* ===== 庆祝动画 ===== */
@@ -778,4 +766,922 @@ body::before {
   .bottom-actions { max-width: 100%; }
   .next-task-text { font-size: 16px; }
   .action-btn { padding: 10px 14px; font-size: 13px; }
+}
+
+/* ===== 清单筛选按钮 ===== */
+.filter-btn {
+  padding: 4px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.filter-btn:hover {
+  background: var(--bg2);
+}
+.filter-btn-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ===== 骨架屏 ===== */
+.skeleton-card {
+  background: linear-gradient(135deg, var(--bg2) 0%, var(--bg) 100%);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 12px;
+}
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+.skeleton-line {
+  height: 14px;
+  background: linear-gradient(90deg, var(--rule) 25%, var(--bg2) 50%, var(--rule) 75%);
+  background-size: 200% 100%;
+  border-radius: 7px;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-line.short { width: 30%; }
+.skeleton-line.medium { width: 60%; }
+.skeleton-line.long { width: 90%; }
+.skeleton-line.title { height: 22px; border-radius: 8px; margin-bottom: 12px; }
+.skeleton-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+.skeleton-btn {
+  flex: 1;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--rule) 25%, var(--bg2) 50%, var(--rule) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-badge {
+  width: 60px;
+  height: 20px;
+  border-radius: 100px;
+  background: linear-gradient(90deg, var(--rule) 25%, var(--bg2) 50%, var(--rule) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-time {
+  width: 70px;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--rule) 25%, var(--bg2) 50%, var(--rule) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== 复制按钮 ===== */
+.copy-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.copy-btn:hover {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  background: var(--accent2-soft);
+}
+.copy-btn:active {
+  transform: scale(0.96);
+}
+
+/* ===== 主题选择器 ===== */
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  background: var(--bg2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.theme-card:hover {
+  border-color: var(--accent2);
+  transform: translateY(-1px);
+}
+.theme-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.theme-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.8);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+.theme-card-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
+}
+.theme-card.selected .theme-card-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ===== 夜间模式三态按钮 ===== */
+.theme-mode-btn {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--rule);
+  background: var(--bg2);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.theme-mode-btn:hover {
+  border-color: var(--accent2);
+  background: var(--accent2-soft);
+}
+.theme-mode-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ===== 成长日记 ===== */
+.diary-item {
+  background: var(--bg2);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.diary-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.diary-type-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.diary-type-badge.achievement { background: color-mix(in srgb, var(--accent3) 12%, transparent); color: var(--accent3); }
+.diary-type-badge.manual { background: color-mix(in srgb, var(--accent2) 12%, transparent); color: var(--accent2); }
+.diary-type-badge.bedtime { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.diary-item-content {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.6;
+  word-break: break-word;
+}
+.diary-item-content p { margin: 0 0 6px; }
+.diary-item-content p:last-child { margin-bottom: 0; }
+
+/* AI 回应区块 */
+.diary-ai-response {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.diary-ai-icon { flex-shrink: 0; font-size: 14px; line-height: 1.6; }
+.diary-ai-text {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.6;
+  word-break: break-word;
+}
+.diary-ai-text p { margin: 0 0 4px; }
+.diary-ai-text p:last-child { margin-bottom: 0; }
+
+.diary-edit {
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.diary-edit:hover { opacity: 1; }
+
+/* ===== 日记编辑器：心情标签 & 预览标签 ===== */
+.mood-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--bg2);
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mood-chip:hover {
+  border-color: var(--accent2);
+  background: var(--accent2-soft);
+}
+.mood-chip-active {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+.diary-tab {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  background: var(--bg2);
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.diary-tab:hover {
+  border-color: var(--accent2);
+}
+.diary-tab-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+#diaryPreview h1, #diaryPreview h2, #diaryPreview h3 { margin: 8px 0 6px; line-height: 1.4; }
+#diaryPreview p { margin: 0 0 8px; }
+#diaryPreview ul, #diaryPreview ol { margin: 0 0 8px; padding-left: 20px; }
+#diaryPreview blockquote { border-left: 3px solid var(--accent); margin: 0 0 8px; padding: 2px 10px; color: var(--muted); }
+#diaryPreview code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+#diaryPreview a { color: var(--accent2); }
+
+/* ============================================================
+   A5 · 微动画与过渡升级
+   ============================================================ */
+
+/* -- 卡片入场：上浮淡入 -- */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.task-item, .next-task-card, .diary-item {
+  animation: cardIn 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+/* 列表交错入场：按顺序依次延迟 */
+#nextTaskContainer .next-task-card, #taskList .task-item { animation-delay: 0.05s; }
+
+/* -- 按钮微动效：按压回弹 -- */
+button, .btn, .action-btn, .mood-btn, .task-btn, .theme-card, .theme-mode-btn, .mood-chip, .diary-tab, .counter-btn, .copy-btn, .filter-btn, .send-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+button:active, .action-btn:active, .mood-btn:active, .task-btn:active, .theme-card:active,
+.theme-mode-btn:active, .mood-chip:active, .diary-tab:active, .counter-btn:active,
+.copy-btn:active, .filter-btn:active, .send-btn:active {
+  transform: scale(0.96);
+  transition-duration: 0.08s;
+}
+
+/* -- 弹窗过渡：遮罩淡入 + 面板上浮 -- */
+.modal-overlay {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.modal-overlay.show {
+  opacity: 1;
+  transition: opacity 0.22s ease;
+}
+.modal-overlay .modal {
+  transform: translateY(16px) scale(0.98);
+  opacity: 0;
+  transition: transform 0.24s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.22s ease;
+}
+.modal-overlay.show .modal {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* -- 列表增删过渡：添加淡入、移除淡出+收起 -- */
+.task-item.removing, .diary-item.removing {
+  animation: cardOut 0.25s ease forwards;
+}
+@keyframes cardOut {
+  to { opacity: 0; transform: translateX(24px) scale(0.96); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; overflow: hidden; }
+}
+
+/* -- 计数徽标跳动 -- */
+.counter-btn .count {
+  transition: transform 0.2s ease;
+}
+.counter-btn.bump .count {
+  animation: bump 0.3s ease;
+}
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* -- 主题切换时的柔和过渡 -- */
+body, .app-container, .app-header, .task-item, .input-box, .modal, .chat-bubble, .api-config, .bottom-actions {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* -- 尊重系统减弱动效偏好 -- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   用户引导模块
+   ============================================================ */
+
+/* ===== 开屏引导页 ===== */
+.welcome-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, var(--warm-bg) 0%, var(--bg) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  z-index: 10000;
+  animation: fadeIn 0.5s ease;
+}
+
+.welcome-brand {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.welcome-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.welcome-title {
+  font-size: 36px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+
+.welcome-tagline {
+  font-size: 16px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.welcome-content {
+  max-width: 360px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.welcome-desc {
+  font-size: 15px;
+  line-height: 2;
+  color: var(--ink);
+}
+
+.welcome-start-btn {
+  padding: 16px 48px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.welcome-start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.welcome-footer {
+  position: absolute;
+  bottom: 24px;
+  text-align: center;
+}
+
+/* ===== 渐进式导览遮罩 ===== */
+.tour-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* 防冻结安全网：未显示的导览遮罩永不拦截点击 */
+.tour-overlay:not(.show) { pointer-events: none; }
+
+.tour-overlay.show {
+  opacity: 1;
+}
+
+/* 幽灵模式：遮罩不拦截点击（用户可操作真实界面），隐藏黑幕；
+   气泡本身保持可点击（跳过/上一步等按钮可用） */
+.tour-overlay.ghost { pointer-events: none; }
+.tour-overlay.ghost .tour-tooltip { pointer-events: auto; }
+.tour-overlay.ghost .tour-mask { display: none; }
+
+/* 聚光灯模式：黑幕变透明（仍作为点击捕获层），由 .tour-spotlight 负责挖洞 */
+.tour-overlay.spotlight-mode .tour-mask { background: transparent; }
+
+.tour-mask {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1;
+}
+
+/* 聚光灯：box-shadow 挖洞效果，高亮目标区域且不改变页面布局 */
+.tour-spotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 4px var(--accent2), 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+/* 交互步骤高亮：仅 outline 脉冲光圈，不改布局、不影响点击 */
+.tour-highlight-live {
+  outline: 3px solid var(--accent2);
+  outline-offset: 3px;
+  border-radius: 12px;
+  animation: tourLivePulse 1.6s ease-in-out infinite;
+}
+@keyframes tourLivePulse {
+  0%, 100% { outline-color: var(--accent2); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent2) 40%, transparent); }
+  50% { outline-color: var(--accent); box-shadow: 0 0 0 8px transparent; }
+}
+
+/* 前4步虚线转动高亮：outline 颜色+间距交替，不改布局、不影响点击 */
+.tour-highlight-dashed {
+  outline: 3px dashed var(--accent2);
+  outline-offset: 3px;
+  border-radius: 12px;
+  animation: tourDashedRotate 2s linear infinite;
+}
+@keyframes tourDashedRotate {
+  0% { outline-color: var(--accent2); outline-offset: 3px; }
+  50% { outline-color: var(--accent); outline-offset: 6px; }
+  100% { outline-color: var(--accent2); outline-offset: 3px; }
+}
+
+.tour-tooltip {
+  position: absolute;
+  z-index: 3;
+  max-width: 320px;
+  padding: 20px;
+  background: var(--bg);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  animation: tooltipIn 0.3s ease;
+  cursor: grab;
+  touch-action: auto;
+}
+
+/* 拖动时才禁止滚动，避免与页面滚动冲突 */
+.tour-tooltip.dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  z-index: 10000;
+  transition: none;
+  touch-action: none;
+}
+
+/* 按钮区域保持 pointer 光标 */
+.tour-tooltip .tour-controls,
+.tour-tooltip .tour-controls button {
+  cursor: pointer;
+}
+
+.tour-tooltip.center {
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tour-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.tour-tooltip-header h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent2);
+  margin: 0;
+}
+
+.tour-step-num {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg2);
+  padding: 4px 10px;
+  border-radius: 100px;
+}
+
+.tour-tooltip-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink);
+  margin-bottom: 16px;
+}
+
+.tour-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tour-skip-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 12px;
+  transition: color 0.2s;
+}
+
+.tour-skip-btn:hover {
+  color: var(--accent2);
+}
+
+.tour-prev-btn, .tour-next-btn {
+  padding: 8px 16px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tour-prev-btn {
+  background: var(--bg2);
+  border: 1px solid var(--rule);
+  color: var(--muted);
+}
+
+.tour-prev-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tour-next-btn {
+  background: var(--accent2);
+  border: none;
+  color: #fff;
+}
+
+.tour-next-btn:hover {
+  background: var(--accent);
+}
+
+/* ============================================================
+   睡前安心仪式模块
+   ============================================================ */
+
+/* ===== 睡前仪式入口按钮 ===== */
+.bedtime-ritual-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, rgba(139,111,142,0.1) 0%, rgba(139,111,142,0.05) 100%);
+  border: 1px solid rgba(139,111,142,0.2);
+  border-radius: 16px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  width: 100%;
+}
+
+.bedtime-ritual-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(139,111,142,0.15);
+}
+
+/* ===== 睡前仪式弹窗夜间主题 ===== */
+.bedtime-modal {
+  background: linear-gradient(180deg, #1a1520 0%, #0d0a12 100%);
+  color: #f0e6d8;
+}
+
+.bedtime-modal h3 {
+  color: #c9a87c;
+}
+
+.bedtime-modal .action-btn.primary {
+  background: linear-gradient(135deg, #c9a87c, #8b6f5e);
+  color: #fff;
+}
+
+.bedtime-modal .action-btn.secondary {
+  background: transparent;
+  border-color: #6a5f55;
+  color: #8a7f75;
+}
+
+/* ===== 日记卡片差异化样式 ===== */
+.diary-item[data-type="achievement"] {
+  --diary-accent: var(--accent3);
+  background: linear-gradient(135deg, rgba(107,142,139,0.08) 0%, rgba(107,142,139,0.03) 100%);
+  border-color: rgba(107,142,139,0.2);
+}
+
+.diary-item[data-type="manual"] {
+  --diary-accent: var(--accent2);
+  background: linear-gradient(135deg, rgba(201,139,123,0.08) 0%, rgba(201,139,123,0.03) 100%);
+  border-color: rgba(201,139,123,0.2);
+}
+
+.diary-item[data-type="bedtime"] {
+  --diary-accent: var(--accent);
+  background: linear-gradient(135deg, rgba(139,111,142,0.08) 0%, rgba(139,111,142,0.03) 100%);
+  border-color: rgba(139,111,142,0.2);
+}
+
+/* ===== 焦虑飘走动画 ===== */
+@keyframes anxietyFadeOut {
+  0% { opacity: 1; transform: translateY(0); }
+  50% { opacity: 0.5; transform: translateY(-20px); }
+  100% { opacity: 0; transform: translateY(-40px); }
+}
+
+.anxiety-fade-out {
+  animation: anxietyFadeOut 2s ease-out forwards;
+}
+
+/* ===== 小确幸选项样式 ===== */
+.gratitude-option {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: left;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gratitude-option:hover {
+  border-color: var(--accent2);
+}
+
+.gratitude-option.selected {
+  background: color-mix(in srgb, #c9a87c 15%, transparent);
+  border-color: #c9a87c;
+}
+
+/* ===== 睡前仪式浮动球 ===== */
+.bedtime-float-ball {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a1520 0%, #2d2340 100%);
+  border: 2px solid rgba(201, 168, 124, 0.4);
+  box-shadow: 0 4px 20px rgba(139, 111, 142, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  z-index: 500;
+  transition: box-shadow 0.3s, transform 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bedtime-float-ball:hover {
+  box-shadow: 0 6px 28px rgba(201, 168, 124, 0.5);
+  transform: scale(1.08);
+}
+
+.bedtime-float-ball:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+.bedtime-float-ball.dragging {
+  transition: none;
+  box-shadow: 0 8px 32px rgba(201, 168, 124, 0.6);
+}
+
+.bedtime-float-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* 睡前仪式确认弹窗 */
+.bedtime-confirm-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+.bedtime-confirm-dialog {
+  background: var(--bg);
+  border-radius: 20px;
+  padding: 28px 24px;
+  max-width: 320px;
+  width: 90%;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+.bedtime-confirm-dialog h3 {
+  font-size: 18px;
+  color: var(--accent2);
+  margin-bottom: 8px;
+}
+
+.bedtime-confirm-dialog p {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.bedtime-confirm-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.bedtime-confirm-btns button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-bedtime-wait {
+  background: var(--bg2);
+  border: 1px solid var(--rule);
+  color: var(--muted);
+}
+
+.btn-bedtime-wait:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-bedtime-start {
+  background: linear-gradient(135deg, #c9a87c, #8b6f5e);
+  border: none;
+  color: #fff;
+}
+
+.btn-bedtime-start:hover {
+  background: linear-gradient(135deg, #d4b896, #9a7e6e);
+}
+
+/* 睡前仪式关闭按钮 */
+.bedtime-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  color: #8a7f75;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.bedtime-close-btn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #f0e6d8;
+}
+
+/* ===== 设置折叠面板 ===== */
+.settings-section {
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  margin-bottom: 8px;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.settings-section-header:hover {
+  opacity: 0.8;
+}
+
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-section-arrow {
+  font-size: 10px;
+  transition: transform 0.25s ease;
+  color: var(--muted);
+}
+
+.settings-section-arrow.open {
+  transform: rotate(90deg);
+}
+
+.settings-section-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease;
+}
+
+.settings-section-body.open {
+  max-height: 800px;
 }

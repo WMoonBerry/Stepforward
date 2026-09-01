@@ -1,0 +1,46 @@
+/* ============================================================
+   StepForward · 主题 Token 基础层
+   语义层（Semantic）+ 兼容层（Legacy）
+   ============================================================ */
+
+:root {
+  /* ---------- 语义层 ---------- */
+  --sf-bg-page: #FAF7F2;
+  --sf-bg-surface: #FFFFFF;
+  --sf-bg-warm: #FDF6EF;
+  --sf-bg-calm: #EAF3EE;
+
+  --sf-ink-primary: #3D3530;
+  --sf-ink-secondary: #8A7F75;
+
+  --sf-border: #E5DDD2;
+  --sf-overlay: rgba(61, 53, 48, 0.5);
+
+  --sf-accent-primary: #C98B6B;
+  --sf-accent-secondary: #8B6F8E;
+  --sf-accent-tertiary: #6B8E8B;
+
+  --sf-warning: #E0A458;
+  --sf-error: #E74C3C;
+  --sf-success: #6B8E8B;
+
+  --sf-accent-soft: rgba(201, 139, 107, 0.12);
+  --sf-accent2-soft: rgba(139, 111, 142, 0.12);
+  --sf-accent3-soft: rgba(107, 142, 139, 0.12);
+
+  /* ---------- 兼容层（映射到旧变量，便于渐进迁移） ---------- */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent: var(--sf-accent-primary);
+  --accent2: var(--sf-accent-secondary);
+  --accent3: var(--sf-accent-tertiary);
+  --warn: var(--sf-warning);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

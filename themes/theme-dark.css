@@ -1,0 +1,35 @@
+/* ============================================================
+   夜间模式 · Dark Mode
+   覆盖语义层为深色（暖色深棕，减少蓝光），保留主题强调色
+   使用 html 前缀提升选择器权重，确保后于主题 CSS 仍生效
+   ============================================================ */
+
+html[data-theme-mode="dark"] {
+  --sf-bg-page: #1E1A17;
+  --sf-bg-surface: #28231F;
+  --sf-bg-warm: #2A221D;
+  --sf-bg-calm: #202624;
+
+  --sf-ink-primary: #EDE6DF;
+  --sf-ink-secondary: #A79C91;
+
+  --sf-border: #3B352F;
+  --sf-overlay: rgba(0, 0, 0, 0.62);
+
+  /* soft 色基于主题强调色生成，随主题变化 */
+  --sf-accent-soft: color-mix(in srgb, var(--sf-accent-primary) 20%, transparent);
+  --sf-accent2-soft: color-mix(in srgb, var(--sf-accent-secondary) 20%, transparent);
+  --sf-accent3-soft: color-mix(in srgb, var(--sf-accent-tertiary) 20%, transparent);
+
+  /* 兼容层 */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

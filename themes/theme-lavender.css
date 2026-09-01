@@ -1,0 +1,45 @@
+/* ============================================================
+   薰衣草星夜 · Lavender Starry Night
+   情绪：温柔、冥想、安全感、想象
+   ============================================================ */
+
+[data-theme="lavender"] {
+  --sf-bg-page: #F7F4FA;
+  --sf-bg-surface: #FFFFFF;
+  --sf-bg-warm: #F3EDFA;
+  --sf-bg-calm: #EAF0F8;
+
+  --sf-ink-primary: #3E3A45;
+  --sf-ink-secondary: #8C8498;
+
+  --sf-border: #E6E0ED;
+  --sf-overlay: rgba(62, 58, 69, 0.45);
+
+  --sf-accent-primary: #9B7EBD;
+  --sf-accent-secondary: #C9A9DC;
+  --sf-accent-tertiary: #7A9CC6;
+
+  --sf-warning: #E0B56E;
+  --sf-error: #D96C6C;
+  --sf-success: #7BA3A0;
+
+  --sf-accent-soft: rgba(155, 126, 189, 0.12);
+  --sf-accent2-soft: rgba(201, 169, 220, 0.12);
+  --sf-accent3-soft: rgba(122, 156, 198, 0.12);
+
+  /* 兼容层 */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent: var(--sf-accent-primary);
+  --accent2: var(--sf-accent-secondary);
+  --accent3: var(--sf-accent-tertiary);
+  --warn: var(--sf-warning);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

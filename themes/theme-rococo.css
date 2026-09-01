@@ -1,0 +1,45 @@
+/* ============================================================
+   洛可可华丽宫廷风 · Rococo Palace
+   情绪：优雅、温暖、被宠爱、仪式感
+   ============================================================ */
+
+[data-theme="rococo"] {
+  --sf-bg-page: #FBF5F2;
+  --sf-bg-surface: #FFFFFF;
+  --sf-bg-warm: #F9EFEA;
+  --sf-bg-calm: #F5ECE6;
+
+  --sf-ink-primary: #4E3F3C;
+  --sf-ink-secondary: #A48B85;
+
+  --sf-border: #EADBD4;
+  --sf-overlay: rgba(78, 63, 60, 0.42);
+
+  --sf-accent-primary: #C78D8B;
+  --sf-accent-secondary: #D9B5A8;
+  --sf-accent-tertiary: #C6A86B;
+
+  --sf-warning: #D69E5C;
+  --sf-error: #C66B6B;
+  --sf-success: #9BA87B;
+
+  --sf-accent-soft: rgba(199, 141, 139, 0.12);
+  --sf-accent2-soft: rgba(217, 181, 168, 0.12);
+  --sf-accent3-soft: rgba(198, 168, 107, 0.12);
+
+  /* 兼容层 */
+  --bg: var(--sf-bg-page);
+  --bg2: var(--sf-bg-surface);
+  --ink: var(--sf-ink-primary);
+  --muted: var(--sf-ink-secondary);
+  --rule: var(--sf-border);
+  --accent: var(--sf-accent-primary);
+  --accent2: var(--sf-accent-secondary);
+  --accent3: var(--sf-accent-tertiary);
+  --warn: var(--sf-warning);
+  --accent-soft: var(--sf-accent-soft);
+  --accent2-soft: var(--sf-accent2-soft);
+  --accent3-soft: var(--sf-accent3-soft);
+  --warm-bg: var(--sf-bg-warm);
+  --calm-bg: var(--sf-bg-calm);
+}

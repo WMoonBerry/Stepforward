@@ -7,16 +7,45 @@
 <meta name="theme-color" content="#FAF7F2">
 <title>StepForward · 步步向前</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="themes/tokens-base.css">
+<link rel="stylesheet" href="themes/theme-dark.css">
 </head>
 <body>
+
+<!-- ==================== 开屏引导页 ==================== -->
+<div id="welcomeOverlay" style="display:none;">
+  <div class="welcome-screen">
+    <div class="welcome-brand">
+      <div class="welcome-icon">🌟</div>
+      <h1 class="welcome-title">StepForward</h1>
+      <p class="welcome-tagline">步步向前，陪你把大事拆成小步骤</p>
+    </div>
+    <div class="welcome-content">
+      <p class="welcome-desc">
+        有时候我们面对各种事情会觉得喘不过气，<br>
+        不知道从哪开始。<br><br>
+        别担心，我会帮你把每件事拆成<br>
+        「不 可 能 完 不 成」的小步骤。<br><br>
+        步步向前，只要你需要，<br>
+        我会永远陪你做任何事。
+      </p>
+    </div>
+    <button class="welcome-start-btn" id="welcomeStartBtn">开始 →</button>
+    <div class="welcome-footer">
+      <span style="font-size:11px;color:var(--muted);">
+        点击开始，就可以让我陪伴你的每一天啦~
+      </span>
+    </div>
+  </div>
+</div>
 
 <!-- ==================== API Key 配置页 ==================== -->
 <div id="setupPage" style="display:none;">
   <div class="setup-page">
     <div class="setup-logo">
-      <div class="emoji">🌤️</div>
+      <div class="emoji">☀️</div>
       <h1>StepForward</h1>
-      <p>步步向前 · 陪你把大任务拆成小步骤</p>
+      <p>步步向前 · 永远陪你一起做任何事</p>
     </div>
 
     <div class="api-config">
@@ -82,7 +111,7 @@
 
     <!-- 顶部导航 -->
     <header class="app-header">
-      <div class="logo">🌤️ 今日陪跑</div>
+      <div class="logo">☀️ 今日陪跑</div>
       <div style="display:flex;align-items:center;gap:12px;">
         <button id="pendingBtn" class="counter-btn pending" title="待办清单">
           📋 <span id="pendingCount">0</span>
@@ -90,6 +119,7 @@
         <button id="doneBtn" class="counter-btn done" title="已完成清单">
           ✅ <span id="doneCount">0</span>
         </button>
+        <button id="diaryBtn" class="settings-btn" title="成长日记">📖</button>
         <button class="settings-btn" id="settingsBtn" title="设置">⚙️</button>
       </div>
     </header>
@@ -103,7 +133,7 @@
       <!-- 任务输入 -->
       <div class="section-title">📝 今天要做什么</div>
       <div class="input-box">
-        <button class="voice-btn" id="voiceInputBtn" title="语音输入">🎙️</button>
+        <button class="voice-btn" id="voiceInputBtn" title="语音输入（开发中）" onclick="handleMicClick()">🎙️</button>
         <input
           type="text"
           id="taskInput"
@@ -114,9 +144,47 @@
 
       <!-- 下一个待办 -->
       <div class="section-title" style="margin-top:24px;">🎯 下一个待办</div>
-      <div id="nextTaskContainer"></div>
+      <div id="nextTaskContainer">
+        <!-- 骨架屏（初始隐藏，JS 控制显隐） -->
+        <div id="appSkeleton" style="display:none;">
+          <div class="skeleton-card">
+            <div class="skeleton-header">
+              <div class="skeleton-badge"></div>
+              <div class="skeleton-time"></div>
+            </div>
+            <div class="skeleton-line title long"></div>
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-actions">
+              <div class="skeleton-btn"></div>
+              <div class="skeleton-btn"></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </main>
+    
+    <!-- 睡前仪式浮动球 -->
+    <div id="bedtimeFloatBall" class="bedtime-float-ball" title="睡前安心仪式">
+      <span class="bedtime-float-icon">🌙</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 渐进式导览遮罩 ==================== -->
+<div id="tourOverlay" class="tour-overlay" style="display:none;">
+  <div class="tour-mask"></div>
+  <div id="tourTooltip" class="tour-tooltip">
+    <div class="tour-tooltip-header">
+      <h4 id="tourTooltipTitle"></h4>
+      <span class="tour-step-num"><span id="tourStepNum">1</span>/<span id="tourStepTotal">8</span></span>
+    </div>
+    <p id="tourTooltipContent" class="tour-tooltip-content"></p>
+    <div class="tour-controls">
+      <button class="tour-skip-btn" id="tourSkipBtn">跳过引导</button>
+      <button class="tour-prev-btn" id="tourPrevBtn" style="display:none;">← 上一步</button>
+      <button class="tour-next-btn" id="tourNextBtn">下一步 →</button>
+    </div>
   </div>
 </div>
 
@@ -146,8 +214,70 @@
   <div class="modal" style="position:relative;max-width:420px;">
     <button class="modal-close" id="closeListModal">×</button>
     <h3 id="listModalTitle" style="color:var(--accent2);">📋 清单</h3>
+    <div id="listFilterBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--rule);">
+      <button data-filter="today" class="filter-btn filter-btn-active">今日</button>
+      <button data-filter="all" class="filter-btn">所有</button>
+      <button data-filter="custom" class="filter-btn">自定义</button>
+      <div id="customDatePicker" style="display:none;align-items:center;gap:4px;font-size:12px;">
+        <input type="date" id="filterDateStart" style="font-size:12px;padding:4px;border-radius:6px;border:1px solid var(--rule);">
+        <span style="color:var(--muted);">~</span>
+        <input type="date" id="filterDateEnd" style="font-size:12px;padding:4px;border-radius:6px;border:1px solid var(--rule);">
+        <button id="applyDateFilter" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer;">确定</button>
+      </div>
+    </div>
     <div id="listModalContent" style="max-height:60vh;overflow-y:auto;">
       <!-- 动态内容 -->
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 成长日记模态框 ==================== -->
+<div id="diaryModal" class="modal-overlay">
+  <div class="modal" style="position:relative;max-width:440px;max-height:85vh;overflow-y:auto;">
+    <button class="modal-close" id="closeDiaryModal">×</button>
+    <h3 style="color:var(--accent2);">📖 成长日记</h3>
+    <div id="diaryFilterBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--rule);">
+      <button data-diary-filter="all" class="filter-btn filter-btn-active">全部</button>
+      <button data-diary-filter="achievement" class="filter-btn">✨完成</button>
+      <button data-diary-filter="manual" class="filter-btn">✍️手写</button>
+      <button data-diary-filter="bedtime" class="filter-btn">🌙晚安</button>
+      <span style="flex:1;"></span>
+      <button id="writeDiaryBtn" class="copy-btn">✍️ 写日记</button>
+    </div>
+    <div id="diaryModalContent" style="max-height:60vh;overflow-y:auto;">
+      <!-- 动态内容 -->
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 写日记模态框 ==================== -->
+<div id="diaryEditModal" class="modal-overlay">
+  <div class="modal" style="position:relative;max-width:440px;">
+    <button class="modal-close" id="closeDiaryEditModal">×</button>
+    <h3 style="color:var(--accent2);" id="diaryEditTitle">✍️ 写日记</h3>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">今天的心情</label>
+      <div id="diaryMoodTags" style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" data-mood="" class="mood-chip">不标记</button>
+        <button type="button" data-mood="😊 开心" class="mood-chip">😊 开心</button>
+        <button type="button" data-mood="😌 平静" class="mood-chip">😌 平静</button>
+        <button type="button" data-mood="😔 低落" class="mood-chip">😔 低落</button>
+        <button type="button" data-mood="😤 烦闷" class="mood-chip">😤 烦闷</button>
+        <button type="button" data-mood="🥱 疲惫" class="mood-chip">🥱 疲惫</button>
+        <button type="button" data-mood="✨ 充满动力" class="mood-chip">✨ 充满动力</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <button type="button" id="diaryTabWrite" class="diary-tab diary-tab-active">✍️ 编辑</button>
+      <button type="button" id="diaryTabPreview" class="diary-tab">👁️ 预览</button>
+      <span style="flex:1;"></span>
+      <span style="font-size:11px;color:var(--muted);align-self:center;">支持 Markdown</span>
+    </div>
+    <textarea id="diaryContent" class="api-input" style="min-height:160px;resize:vertical;margin-bottom:10px;" placeholder="记录此刻的想法...（支持 Markdown）"></textarea>
+    <div id="diaryPreview" style="display:none;min-height:160px;max-height:40vh;overflow-y:auto;background:var(--bg2);border:1px solid var(--rule);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.7;margin-bottom:10px;color:var(--ink);word-break:break-word;"></div>
+    <div style="display:flex;gap:8px;">
+      <button id="diaryDeleteBtn" class="api-save" style="flex:1;margin-bottom:0;background:var(--sf-error);display:none;">删除</button>
+      <button id="diarySaveBtn" class="api-save" style="flex:2;margin-bottom:0;">保存</button>
     </div>
   </div>
 </div>
@@ -159,76 +289,187 @@
     <h3 style="color:var(--accent2);">⚙️ 设置</h3>
 
     <!-- 基础设置 -->
-    <div style="margin-bottom:16px;">
-      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">我的称呼</label>
-      <input type="text" id="settingsUserName" class="api-input" placeholder="不填也行" style="margin-bottom:0;">
-    </div>
-
-    <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
-      <label style="font-size:13px;font-weight:600;">不可抗力自动重排后续任务</label>
-      <input type="checkbox" id="settingsAutoReschedule" style="width:18px;height:18px;accent-color:var(--accent2);">
-    </div>
-
-    <div style="margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div>
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">工作开始(时)</label>
-        <input type="number" id="settingsWorkStart" min="0" max="23" class="api-input" style="margin-bottom:0;">
+    <div class="settings-section">
+      <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+        <span class="settings-section-title">👤 基础设置</span>
+        <span class="settings-section-arrow">▶</span>
       </div>
-      <div>
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">工作结束(时)</label>
-        <input type="number" id="settingsWorkEnd" min="0" max="23" class="api-input" style="margin-bottom:0;">
+      <div class="settings-section-body">
+        <div style="margin-bottom:12px;">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">我的称呼</label>
+          <input type="text" id="settingsUserName" class="api-input" placeholder="不填也行" style="margin-bottom:0;">
+        </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+          <label style="font-size:13px;font-weight:600;">不可抗力自动重排后续任务</label>
+          <input type="checkbox" id="settingsAutoReschedule" style="width:18px;height:18px;accent-color:var(--accent2);">
+        </div>
+        <div style="margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">工作开始(时)</label>
+            <input type="number" id="settingsWorkStart" min="0" max="23" class="api-input" style="margin-bottom:0;">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">工作结束(时)</label>
+            <input type="number" id="settingsWorkEnd" min="0" max="23" class="api-input" style="margin-bottom:0;">
+          </div>
+        </div>
+        <div style="margin-bottom:0;">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">提醒强度 <span style="font-size:11px;color:var(--muted);font-weight:400;">（即将推出）</span></label>
+          <select id="settingsIntensity" class="api-select" style="margin-bottom:0;" disabled>
+            <option value="standard">标准（适中）</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <div style="margin-bottom:16px;">
-      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">提醒强度</label>
-      <select id="settingsIntensity" class="api-select" style="margin-bottom:0;">
-        <option value="gentle">轻柔（少打扰，间隔长）</option>
-        <option value="standard">标准（适中）</option>
-        <option value="proactive">积极（多提醒）</option>
-      </select>
+    <!-- 用餐时间设置 -->
+    <div class="settings-section">
+      <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+        <span class="settings-section-title">🍽️ 用餐时间</span>
+        <span class="settings-section-arrow">▶</span>
+      </div>
+      <div class="settings-section-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">午餐开始时间</label>
+            <input type="time" id="settingsLunchStart" class="api-input" style="margin-bottom:0;font-size:12.5px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">午餐时长(分钟)</label>
+            <input type="number" id="settingsLunchDuration" min="0" max="180" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="0=不避开">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">晚餐开始时间</label>
+            <input type="time" id="settingsDinnerStart" class="api-input" style="margin-bottom:0;font-size:12.5px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">晚餐时长(分钟)</label>
+            <input type="number" id="settingsDinnerDuration" min="0" max="180" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="0=不避开">
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;">
+          AI 排期时会自动避开用餐时段。时长设为 0 则不避开。
+        </p>
+      </div>
     </div>
 
     <!-- 声音设置 -->
-    <div style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
-      <div style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:0.05em;margin-bottom:12px;">🔊 声音与播报</div>
-      <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
-        <label style="font-size:13px;">通知提示音</label>
-        <input type="checkbox" id="settingsSound" style="width:18px;height:18px;accent-color:var(--accent3);" checked>
+    <div class="settings-section">
+      <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+        <span class="settings-section-title">🔊 声音与播报</span>
+        <span class="settings-section-arrow">▶</span>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <label style="font-size:13px;">语音播报待办内容</label>
-        <input type="checkbox" id="settingsVoice" style="width:18px;height:18px;accent-color:var(--accent3);" checked>
+      <div class="settings-section-body">
+        <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+          <label style="font-size:13px;">通知提示音</label>
+          <input type="checkbox" id="settingsSound" style="width:18px;height:18px;accent-color:var(--accent3);" checked>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <label style="font-size:13px;">语音播报待办内容</label>
+          <input type="checkbox" id="settingsVoice" style="width:18px;height:18px;accent-color:var(--accent3);" checked>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主题外观设置 -->
+    <div class="settings-section">
+      <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+        <span class="settings-section-title">🎨 主题外观</span>
+        <span class="settings-section-arrow">▶</span>
+      </div>
+      <div class="settings-section-body">
+        <p style="font-size:11.5px;color:var(--muted);margin:0 0 12px;line-height:1.6;">选择你喜欢的界面氛围，切换后立即生效。</p>
+        <div id="themePicker" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
+        <div style="margin-top:12px;">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">🌗 夜间模式</label>
+          <div id="themeModePicker" style="display:flex;gap:8px;">
+            <button type="button" data-theme-mode="system" class="theme-mode-btn">跟随系统</button>
+            <button type="button" data-theme-mode="light" class="theme-mode-btn">浅色</button>
+            <button type="button" data-theme-mode="dark" class="theme-mode-btn">深色</button>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- AI 人格设置 -->
-    <div style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
-      <div style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:0.05em;margin-bottom:12px;">🎭 AI 陪伴者气质</div>
-      <p style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.6;">
-        你可以自定义陪伴者的形象。留空则使用默认设定（经验丰富的中年女性心理咨询师）。
-      </p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div>
-          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">年龄</label>
-          <input type="text" id="settingsPersonaAge" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：35">
-        </div>
-        <div>
-          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">性别</label>
-          <input type="text" id="settingsPersonaGender" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：女性">
-        </div>
+    <div class="settings-section">
+      <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+        <span class="settings-section-title">🎭 AI 陪伴者气质</span>
+        <span class="settings-section-arrow">▶</span>
       </div>
-      <div style="margin-bottom:10px;">
-        <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">说话方式</label>
-        <input type="text" id="settingsPersonaStyle" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：温柔、有耐心、语速稍慢">
-      </div>
-      <div style="margin-bottom:0;">
-        <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">和你的关系</label>
-        <input type="text" id="settingsPersonaRelation" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：心理咨询师、老朋友、树洞">
+      <div class="settings-section-body">
+        <p style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.6;">
+          你可以自定义陪伴者的形象。留空则使用默认设定（经验丰富的中年女性心理咨询师）。
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">年龄</label>
+            <input type="text" id="settingsPersonaAge" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：35">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">性别</label>
+            <input type="text" id="settingsPersonaGender" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：女性">
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">说话方式</label>
+          <input type="text" id="settingsPersonaStyle" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：温柔、有耐心、语速稍慢">
+        </div>
+        <div style="margin-bottom:0;">
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">和你的关系</label>
+          <input type="text" id="settingsPersonaRelation" class="api-input" style="margin-bottom:0;font-size:12.5px;" placeholder="如：心理咨询师、老朋友、树洞">
+        </div>
       </div>
     </div>
 
     <button id="saveSettingsBtn" class="api-save" style="width:100%;margin-bottom:12px;">保存设置</button>
+
+    <!-- 成长日记设置 -->
+    <div class="settings-section">
+      <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+        <span class="settings-section-title">📖 成长日记</span>
+        <span class="settings-section-arrow">▶</span>
+      </div>
+      <div class="settings-section-body">
+        <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <label style="font-size:13px;">手写日记即时回应</label>
+            <p style="font-size:11px;color:var(--muted);margin-top:2px;">每次写日记后给予温暖回应</p>
+          </div>
+          <input type="checkbox" id="settingsDiaryAIResponse" style="width:18px;height:18px;accent-color:var(--accent2);" checked>
+        </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <label style="font-size:13px;">睡前仪式提醒</label>
+            <p style="font-size:11px;color:var(--muted);margin-top:2px;">固定时间提醒做睡前仪式</p>
+          </div>
+          <input type="checkbox" id="settingsBedtimeReminder" style="width:18px;height:18px;accent-color:var(--accent2);">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">提醒时间</label>
+          <input type="time" id="settingsBedtimeTime" class="api-input" style="margin-bottom:0;font-size:12.5px;" value="22:30">
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <label style="font-size:13px;">日记卡片视觉效果</label>
+            <p style="font-size:11px;color:var(--muted);margin-top:2px;">不同类型日记显示不同样式</p>
+          </div>
+          <input type="checkbox" id="settingsDiaryCardVisual" style="width:18px;height:18px;accent-color:var(--accent2);" checked>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据管理 -->
+    <div style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;color:var(--accent2);letter-spacing:0.05em;margin-bottom:12px;">💾 数据管理</div>
+      <button id="restartTourBtn" style="width:100%;padding:10px;border:1px solid var(--rule);background:var(--bg2);border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:8px;">🔄 重新查看新手引导</button>
+      <button id="exportAllEmotionBtn" style="width:100%;padding:10px;border:1px solid var(--rule);background:var(--bg2);border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:8px;">📋 一键复制所有陪伴回顾</button>
+      <p style="font-size:11px;color:var(--muted);line-height:1.6;">
+        将所有情绪陪伴对话记录复制到剪贴板，可粘贴到记事本等应用中保存。
+      </p>
+    </div>
 
     <!-- 危险区 -->
     <div style="border-top:1px solid var(--rule);padding-top:16px;">
@@ -243,6 +484,10 @@
 <script src="js/markdown.js"></script>
 <script src="js/prompt.js"></script>
 <script src="js/api.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/onboarding.js"></script>
+<script src="js/diary.js"></script>
 <script src="js/app.js"></script>
 
 </body>
