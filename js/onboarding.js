@@ -26,16 +26,16 @@ const TOUR_WAIT_MAX_MS = 60000;   // 最长等待 60 秒
 const TOUR_STEPS = [
   {
     target: '.input-box',
-    title: '在这里告诉我你想做什么',
+    title: 'Hi~在开始使用前，请让我向你进行功能介绍~\n在这里告诉我你想做什么',
     content: '我来帮你拆分成不可能完不成的小步骤。\n试着输入一个任务，点击 → 提交',
     position: 'top',
     trigger: 'taskSubmit',      // 触发条件：用户提交任务
-    prefill: '写项目周报 +下午3点前交'
+    prefill: '现在写项目周报，明天8点提交'
   },
   {
     target: '#previewSection',
-    title: '看，我把大任务变成了小步骤~',
-    content: '相信我，很容易就能完成的！\n点击「就按这个办」开始吧~',
+    title: '看，我会给你把大任务变成小步骤~',
+    content: '相信我，这样一步步来，就不用害怕无法启动啦！\n点击「就按这个办」开始吧~\nps:如果想调整，点「需要改一改」可以调整哦~',
     position: 'top',
     trigger: 'taskConfirm',     // 触发条件：用户确认任务
     waitText: '正在拆解任务，稍等一下…'   // 目标未出现时的等待文案
@@ -43,27 +43,27 @@ const TOUR_STEPS = [
   {
     target: '#nextTaskContainer',
     title: '这里有本次待办步骤的提示卡片',
-    content: '做的时候专注这个任务就好啦！\n完成后点击 ✓ 标记完成~',
+    content: '做的时候专注这个任务就好啦~\n点击「我开始做啦✓」 按钮，一键启动任务！',
     position: 'top',
     trigger: 'taskAction'       // 触发条件：完成任务或暂停
   },
   {
     target: '#nextTaskContainer',
-    title: '做得好！',
-    content: '如果临时有事或做不动了，也不用有压力，点「等一下」，不论发生了什么我都一直陪着你。',
+    title: '做得好！启动其实没那么难对不对~',
+    content: '如果临时有事或心情不好做不动，也不用有压力，点「等一下」按钮，不论发生了什么我都一直陪着你。',
     position: 'top'
     // 无 trigger，传统步骤
   },
   {
     target: '#pendingBtn',
-    title: '点击这里查看目前已安排的任务哦~',
-    content: '',
+    title: '在这里查看目前已安排的任务哦~',
+    content: '计划的时间也可以在这里修改哦~',
     position: 'bottom'
   },
   {
     target: '#doneBtn',
-    title: '这是完成后的任务集合',
-    content: '里面的每一个步骤都是勋章，哪怕再微小，都是你勇敢前行的证明~请常回来看看哦！',
+    title: '完成后的任务在这里查看~',
+    content: '每一个步骤都是对你勇敢前行颁发的勋章~ 常回来看看，成就感满满！',
     position: 'bottom'
   },
   {
@@ -80,14 +80,14 @@ const TOUR_STEPS = [
   },
   {
     target: '#settingsBtn',
-    title: '在这里调整我对你的称呼、工作时间、提醒强度、外观模式',
-    content: '所有的功能都可以在这里设置——让我更贴心地为你服务~',
+    title: '所有的功能设置都在这里，让我更贴心地为你服务~',
+    content: '可以更改我对你的称呼、允许安排任务的工作时间、皮肤、吉祥物',
     position: 'bottom'
   },
   {
     target: null,
     title: '我的功能都介绍完毕啦',
-    content: '如果你还想再回顾，随时可以在 ⚙️ 设置里重新查看引导哦，接下来让我和你一起向前走吧~',
+    content: '如果你还想再回顾，随时可以在 ⚙️ 设置里重新查看引导哦，接下来让我陪你一起向前走吧~',
     position: 'center'
   }
 ];

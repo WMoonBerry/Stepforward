@@ -201,15 +201,14 @@ function buildTaskPlannerPrompt(settings = null) {
   const todayDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
   const todayStr = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
 
-  // 用餐时间约束
-  let mealTimeRule = '';
+  // 用餐时间信息（作为默认偏好，不是硬约束）
+  let mealTimeInfo = '';
   if (settings) {
     const lunchStart = settings.lunchStart || '12:00';
     const lunchDuration = settings.lunchDuration ?? 90;
     const dinnerStart = settings.dinnerStart || '18:00';
     const dinnerDuration = settings.dinnerDuration ?? 90;
 
-    // 计算用餐结束时间
     const addMinutes = (timeStr, mins) => {
       const parts = timeStr.split(':');
       const d = new Date();
@@ -227,15 +226,12 @@ function buildTaskPlannerPrompt(settings = null) {
       mealRules.push(`   - 晚餐：${dinnerStart} - ${dinnerEnd}（${dinnerDuration}分钟）`);
     }
     if (mealRules.length > 0) {
-      mealTimeRule = `7. 用餐时间请避开：
-${mealRules.join('\n')}
-   不要将任务安排在用餐时段内。用餐时间本身就是休息，用餐前后不需要额外安排休息。
-`;
+      mealTimeInfo = `${mealRules.join('\n')}`;
     }
   }
 
-  // 休息时间规则（总是添加
-  const breakRule = `8. 休息安排规则：
+  // 休息时间规则
+  const breakRule = `休息安排规则：
    - 每连续工作 45-60 分钟后，安排 5-10 分钟短休息
    - 事件与事件之间，如果间隔时间 >= 15 分钟，视为自然休息
    - 同一事件内步骤之间的休息较短（5 分钟左右）
@@ -244,32 +240,37 @@ ${mealRules.join('\n')}
    - 如果某步骤后有休息，请在该步骤的 JSON 中增加 "breakAfter": true 字段
 `;
 
-  // 规则编号调整：如果有用餐时间，休息是第8条；如果没有，休息是第7条
-  const restRuleNum = mealTimeRule ? '9' : '8';
-  const adjustedBreakRule = breakRule.replace(/^8\./, restRuleNum + '.');
-  const crossDayRuleNum = mealTimeRule ? '10' : '9';
-  const dateRuleNum = mealTimeRule ? '11' : '10';
-
   return `你是用户的「首席幕僚」——一位经验丰富的总裁办高级秘书，擅长把混乱的事情整理成清晰的可执行步骤。
 
 ${settings?.userName ? `用户名字：${settings.userName}。` : ''}
 当前时间：${todayStr} ${currentTime}
 今天日期：${todayDate}
 
+【最高优先级原则：用户意图优先】
+⚠️ 极其重要：用户在输入中明确提到的时间安排，优先级高于所有其他规则（包括工作时间、用餐时间）。
+- 如果用户说了具体时间点（"8点"、"下午3点"、"晚上10点"、"明天早上8点"等），必须按用户说的时间安排，不要因为不在工作时间或用餐时间内就修改
+- 如果用户说了"现在"、"马上"、"立刻"，第一个步骤必须从当前时间（${currentTime}）开始
+- 如果用户说了时长（"2小时"、"半小时"等），请按用户说的时长安排
+- 只有当用户没有提到任何时间信息时，才使用下面的默认工作时间作为参考
+
 【第一步：先判断任务日期，再安排时间】
-⚠️ 极其重要：在拆解任务之前，先从用户输入中识别任务的发生日期：
-- 如果用户明确提到了日期（"明天"、"后天"、"下周一"、"9月5日"、"周五下午"、"下周三之前"等），**必须将所有步骤安排到对应日期**，绝对不能安排在今天
+- 如果用户明确提到了日期（"明天"、"后天"、"下周一"、"9月5日"、"周五下午"、"下周三之前"等），必须将所有步骤安排到对应日期，绝对不能安排在今天
 - 如果用户提到的是"今天"、"现在"、"马上"，或者完全没提日期，才安排在今天
 - 如果今天工作时段已过且用户没指定日期，安排到明天
 
-你的任务：
-1. 把用户输入的每一件事**分别独立拆解**（不要混在一起）
-2. 每件事拆成 3-5 个小步骤，每个步骤 5-30 分钟
-3. 第一个步骤必须是"微启动"——极小的动作（比如"打开文档"、"看一眼模板"）
-4. 按优先级和时间顺序排列所有步骤
-5. 严格在工作时段 ${workStart}:00-${workEnd}:00 内安排任务时间
-6. 每个步骤必须包含 date 字段（YYYY-MM-DD 格式），日期由上面的"第一步"判断决定
-${mealTimeRule}${adjustedBreakRule}${crossDayRuleNum}. 每个步骤可以包含可选的 breakAfter 字段（布尔值，默认为 false），表示该步骤后是否有休息
+【任务类型识别】
+如果用户输入的任务本身是生活类活动，请将其安排到合适的时段：
+- 吃饭、用餐、午餐、晚餐类任务 → 安排在对应用餐时段内（见下方用餐信息）
+- 午睡、午休类任务 → 安排在午餐之后
+- 睡觉、休息类任务 → 安排在晚间工作时段之后
+这类任务不需要遵循工作时间限制，它们本身就是生活节奏的一部分。
+
+用户的默认工作时间（仅在用户未明确指定时间时作为参考）：${workStart}:00-${workEnd}:00
+${mealTimeInfo ? `\n用户的用餐时间（作为参考）：\n${mealTimeInfo}` : ''}
+
+${breakRule}
+
+每个步骤可以包含可选的 breakAfter 字段（布尔值，默认为 false），表示该步骤后是否有休息。
 
 请以 JSON 返回，不要有任何其他文字：
 {

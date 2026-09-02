@@ -38,7 +38,15 @@ function getData() {
  */
 function saveData(data) {
   console.log('[saveData] 保存数据，任务数:', data.tasks.length);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (window._saveDataTimer) {
+    clearTimeout(window._saveDataTimer);
+  }
+  window._saveDataPending = data;
+  window._saveDataTimer = setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(window._saveDataPending));
+    window._saveDataTimer = null;
+    console.log('[saveData] 节流写入完成');
+  }, 200);
 }
 
 /**
@@ -445,6 +453,116 @@ let listFilterState = { type: 'today', dateStart: null, dateEnd: null };
 let currentListType = 'pending';
 
 /**
+ * 前端关键词兜底校验（方案5）
+ * 在 AI 返回拆解结果后，用硬代码做最后一道防线：
+ * 1. 吃饭/睡觉类任务被排出对应时段 → 修正
+ * 2. 用户说了"现在/马上"但 AI 没听 → 第一个步骤时间修正为当前时间
+ */
+function applyScheduleFallback(parsed, userInput, settings) {
+  const now = new Date();
+  const currentTimeStr = formatTime(now);
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+  // 关键词定义
+  const mealKeywords = ['吃饭', '午饭', '午餐', '晚饭', '晚餐', '用餐', '干饭', '觅食', '吃饭了', '饭点'];
+  const sleepKeywords = ['睡觉', '午睡', '午休', '休息', '入睡', '睡觉了', 'nap'];
+  const nowKeywords = ['现在', '马上', '立刻', '立马', '此刻'];
+
+  // 用餐时段（从设置读取）
+  const lunchStart = settings?.lunchStart || '12:00';
+  const lunchDuration = settings?.lunchDuration ?? 90;
+  const dinnerStart = settings?.dinnerStart || '18:00';
+  const dinnerDuration = settings?.dinnerDuration ?? 90;
+
+  const toMinutes = (timeStr) => {
+    if (!timeStr) return null;
+    const parts = timeStr.split(':');
+    return parseInt(parts[0]) * 60 + parseInt(parts[1] || 0);
+  };
+
+  const lunchEndMin = toMinutes(lunchStart) + lunchDuration;
+  const dinnerEndMin = toMinutes(dinnerStart) + dinnerDuration;
+
+  const isInLunchTime = (timeStr) => {
+    const t = toMinutes(timeStr);
+    if (t === null) return false;
+    return t >= toMinutes(lunchStart) && t <= lunchEndMin;
+  };
+
+  const isInDinnerTime = (timeStr) => {
+    const t = toMinutes(timeStr);
+    if (t === null) return false;
+    return t >= toMinutes(dinnerStart) && t <= dinnerEndMin;
+  };
+
+  const userSaidNow = nowKeywords.some(kw => userInput.includes(kw));
+  const userLower = userInput.toLowerCase();
+
+  let corrected = 0;
+
+  parsed.tasks.forEach(task => {
+    const taskName = (task.parentTask || '').toLowerCase();
+    const isMealTask = mealKeywords.some(kw => taskName.includes(kw));
+    const isSleepTask = sleepKeywords.some(kw => taskName.includes(kw));
+
+    // 校验1：吃饭类任务应安排在用餐时段
+    if (isMealTask && task.steps && task.steps.length > 0) {
+      const firstStep = task.steps[0];
+      if (firstStep.time && !isInLunchTime(firstStep.time) && !isInDinnerTime(firstStep.time)) {
+        // 判断是午饭还是晚饭
+        const isLunch = taskName.includes('午') || taskName.includes('中午');
+        const isDinner = taskName.includes('晚') || taskName.includes('夜');
+        if (isLunch && !isDinner) {
+          firstStep.time = lunchStart;
+          corrected++;
+        } else if (isDinner) {
+          firstStep.time = dinnerStart;
+          corrected++;
+        } else {
+          // 模糊的"吃饭"，默认放午餐
+          firstStep.time = lunchStart;
+          corrected++;
+        }
+      }
+    }
+
+    // 校验2：睡觉/午休类任务应安排在中午饭后或晚间
+    if (isSleepTask && task.steps && task.steps.length > 0) {
+      const firstStep = task.steps[0];
+      const isNap = taskName.includes('午');
+      if (isNap && firstStep.time) {
+        const t = toMinutes(firstStep.time);
+        // 午休应该在午饭后（lunchEndMin 之后）
+        if (t !== null && t < lunchEndMin) {
+          // 推到午餐结束时间
+          const h = Math.floor(lunchEndMin / 60);
+          const m = lunchEndMin % 60;
+          firstStep.time = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+          corrected++;
+        }
+      }
+    }
+
+    // 校验3：用户说了"现在/马上"但第一个步骤不是当前时间附近
+    if (userSaidNow && task.steps && task.steps.length > 0) {
+      const firstStep = task.steps[0];
+      const nowMin = toMinutes(currentTimeStr);
+      const stepMin = toMinutes(firstStep.time);
+      if (stepMin !== null && Math.abs(stepMin - nowMin) > 120) {
+        // 偏差超过 2 小时，说明 AI 没听"现在"
+        firstStep.time = currentTimeStr;
+        firstStep.date = todayStr;
+        corrected++;
+      }
+    }
+  });
+
+  if (corrected > 0) {
+    console.log('[applyScheduleFallback] 兜底修正了', corrected, '处时间安排');
+  }
+}
+
+/**
  * 调用 AI 将用户输入的任务拆解为多个小步骤（不保存，仅返回解析结果）
  * @param {string} taskInput - 用户输入的原始任务描述
  * @param {string} [revisionFeedback] - 用户的修改反馈（如果是重新拆解）
@@ -503,6 +621,9 @@ async function callBreakdownAI(taskInput, revisionFeedback) {
   if (!parsed || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
     throw new Error('AI 返回的拆解结果为空，请重试');
   }
+
+  // 前端关键词兜底校验（方案5）
+  applyScheduleFallback(parsed, taskInput, settings);
 
   return parsed;
 }
@@ -1769,11 +1890,14 @@ function openParentTaskMenu(parentName, source) {
       const d = getData();
       const now = new Date().toISOString();
       let completedCount = 0;
+      const _batchIds = [];
       d.tasks.forEach(t => {
         if (t.parentTask === parentName && t.status === 'pending') {
           t.status = 'done';
           t.completedAt = now;
-          d.diary = [...(d.diary || []), { id: Date.now() + Math.random(), type: 'achievement', text: '完成了：' + t.text, timestamp: now }];
+          const _bid = Date.now() + Math.random();
+          _batchIds.push(_bid);
+          d.diary = [...(d.diary || []), { id: _bid, type: 'achievement', text: '完成了：' + t.text, timestamp: now }];
           completedCount++;
         }
       });
@@ -1792,9 +1916,25 @@ function openParentTaskMenu(parentName, source) {
           [{ role: 'user', content: praisePrompt }],
           '你是一个温柔软萌、很会夸人的陪伴者。语气真诚温暖，多用"你"，少提"我"。'
         ).then(function(fullText) {
-          if (fullText) praiseModal3.update(fullText);
+          if (fullText) {
+            praiseModal3.update(fullText);
+            // 将夸夸内容写回本批次所有日记条目
+            const d2 = getData();
+            _batchIds.forEach(bid => {
+              const entry = d2.diary.find(e => e.id === bid);
+              if (entry) entry.aiResponse = fullText;
+            });
+            saveData(d2);
+          }
         }).catch(function(err) {
-          praiseModal3.update('你真的好棒！完成了"' + parentName + '"的全部' + steps.length + '个步骤，你太厉害了～✨');
+          const fallback = '你真的好棒！完成了"' + parentName + '"的全部' + steps.length + '个步骤，你太厉害了～✨';
+          praiseModal3.update(fallback);
+          const d2 = getData();
+          _batchIds.forEach(bid => {
+            const entry = d2.diary.find(e => e.id === bid);
+            if (entry) entry.aiResponse = fallback;
+          });
+          saveData(d2);
         });
       } catch (e) {
         praiseModal3.update('你真的好棒！完成了"' + parentName + '"的全部' + steps.length + '个步骤，你太厉害了～✨');
@@ -1833,7 +1973,8 @@ async function markDone(taskId) {
 
   task.status = 'done';
   task.completedAt = new Date().toISOString();
-  data.diary = [...(data.diary || []), { id: Date.now(), type: 'achievement', date: todayDateStr(), text: `完成了：${task.parentTask ? task.parentTask + ' · ' : ''}${task.text}`, timestamp: new Date().toISOString() }];
+  const _diaryId = Date.now();
+  data.diary = [...(data.diary || []), { id: _diaryId, type: 'achievement', date: todayDateStr(), text: `完成了：${task.parentTask ? task.parentTask + ' · ' : ''}${task.text}`, timestamp: new Date().toISOString() }];
   saveData(data);
 
   // 行为画像埋点
@@ -1863,11 +2004,21 @@ async function markDone(taskId) {
       [{ role: 'user', content: praisePrompt }],
       '你是一个温柔软萌、很会夸人的陪伴者。语气真诚温暖，多用"你"，少提"我"。'
     ).then(function(fullText) {
-      if (fullText) praiseModal.update(fullText);
+      if (fullText) {
+        praiseModal.update(fullText);
+        // 将夸夸内容写回日记条目
+        const d2 = getData();
+        const entry = d2.diary.find(e => e.id === _diaryId);
+        if (entry) { entry.aiResponse = fullText; saveData(d2); }
+      }
       // 30秒后自动关闭
       setTimeout(function() { praiseModal.close(); }, 30000);
     }).catch(function(err) {
-      praiseModal.update('你真的好棒！完成了"' + task.text + '"，你太厉害了～✨');
+      const fallback = '你真的好棒！完成了"' + task.text + '"，你太厉害了～✨';
+      praiseModal.update(fallback);
+      const d2 = getData();
+      const entry = d2.diary.find(e => e.id === _diaryId);
+      if (entry) { entry.aiResponse = fallback; saveData(d2); }
       setTimeout(function() { praiseModal.close(); }, 30000);
     });
   } catch (e) {
@@ -2005,7 +2156,8 @@ function markDoneFromList(taskId) {
     if (!t2) return;
     t2.status = 'done';
     t2.completedAt = new Date().toISOString();
-    d2.diary = [...(d2.diary || []), { id: Date.now(), type: 'achievement', date: todayDateStr(), text: '完成了：' + (t2.parentTask ? t2.parentTask + ' · ' : '') + t2.text, timestamp: new Date().toISOString() }];
+    const _diaryId2 = Date.now();
+    d2.diary = [...(d2.diary || []), { id: _diaryId2, type: 'achievement', date: todayDateStr(), text: '完成了：' + (t2.parentTask ? t2.parentTask + ' · ' : '') + t2.text, timestamp: new Date().toISOString() }];
     saveData(d2);
 
     // 行为画像埋点
@@ -2035,9 +2187,18 @@ function markDoneFromList(taskId) {
         [{ role: 'user', content: praisePrompt }],
         '你是一个温柔软萌、很会夸人的陪伴者。语气真诚温暖，多用"你"，少提"我"。'
       ).then(function(fullText) {
-        if (fullText) praiseModal2.update(fullText);
+        if (fullText) {
+          praiseModal2.update(fullText);
+          const d3 = getData();
+          const entry = d3.diary.find(e => e.id === _diaryId2);
+          if (entry) { entry.aiResponse = fullText; saveData(d3); }
+        }
       }).catch(function(err) {
-        praiseModal2.update('你真的好棒！完成了"' + t2.text + '"，你太厉害了～✨');
+        const fallback = '你真的好棒！完成了"' + t2.text + '"，你太厉害了～✨';
+        praiseModal2.update(fallback);
+        const d3 = getData();
+        const entry = d3.diary.find(e => e.id === _diaryId2);
+        if (entry) { entry.aiResponse = fallback; saveData(d3); }
       });
     } catch (e) {
       praiseModal2.update('你真的好棒！完成了"' + t2.text + '"，你太厉害了～✨');
@@ -2310,6 +2471,9 @@ function formatAllDiaryForCopy() {
       if (entry.type === 'achievement') {
         text += `${meta.icon} ${meta.label} · ${timeStr}\n`;
         text += `${entry.text || ''}\n`;
+        if (entry.aiResponse) {
+          text += `--- 夸夸 ---\n${entry.aiResponse}\n`;
+        }
 
       } else if (entry.type === 'manual') {
         const moodTag = entry.mood ? ` · ${entry.mood}` : '';
@@ -2903,6 +3067,8 @@ function scheduleReminders() {
     const taskTime = parseScheduledDateTime(task.scheduledDate, task.scheduledTime);
     if (!taskTime) return;
     const diff = taskTime - now;
+    // 过期任务(diff<0)不设0ms定时器，由 handleOverdueTasks 统一处理
+    if (diff < 0) return;
     const delay = Math.max(0, diff);
     if (delay > 12 * 60 * 60 * 1000) return;
 
@@ -3583,6 +3749,233 @@ function showBedtimeConfirm() {
 /**
  * 显示主应用界面，初始化所有内容
  */
+/**
+ * 检测过期任务并弹"欢迎回来"分批处理弹窗
+ * 在 showApp() 中调用，renderNextTask/scheduleReminders 之前执行
+ */
+function handleOverdueTasks() {
+  const data = getData();
+  const now = new Date();
+  const overdue = data.tasks.filter(t => {
+    if (t.status !== 'pending' || !t.scheduledTime) return false;
+    const tTime = parseScheduledDateTime(t.scheduledDate, t.scheduledTime);
+    return tTime && tTime < now;
+  });
+
+  if (overdue.length === 0) return false;
+
+  console.log('[handleOverdueTasks] 发现', overdue.length, '个过期任务');
+
+  // 按母任务分组
+  const groups = {};
+  overdue.forEach(t => {
+    const key = t.parentTask || t.text;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  const settings = getSettings();
+  const userName = settings.userName || '';
+
+  const overlay = createEl('div', 'modal-overlay');
+  overlay.classList.add('show');
+  overlay.style.zIndex = '9999';
+
+  const modal = createEl('div', 'modal');
+  modal.style.maxWidth = '460px';
+  modal.style.maxHeight = '80vh';
+  modal.style.overflow = 'auto';
+
+  modal.innerHTML = `
+    <div style="text-align:center;padding:4px 0 12px;">
+      <div style="font-size:17px;font-weight:700;color:var(--accent2);">欢迎回来，${escapeHtml(userName)} 💕</div>
+      <div style="font-size:13px;color:var(--ink);margin-top:6px;line-height:1.7;">
+        之前的计划中留下了这些任务，<br>想怎么安排一下？
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:6px 10px;background:var(--bg2);border-radius:8px;">
+      <input type="checkbox" id="overdueSelectAll" style="width:16px;height:16px;">
+      <label for="overdueSelectAll" style="font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;">全选</label>
+      <div style="flex:1;"></div>
+      <button class="action-btn ghost tiny" id="overdueIgnoreBtn" style="font-size:11px;">忽略</button>
+      <button class="action-btn secondary tiny" id="overdueDoneBtn" style="font-size:11px;">已完成</button>
+      <button class="action-btn primary tiny" id="overduePostponeBtn" style="font-size:11px;">后推</button>
+    </div>
+    <div id="overdueTaskList" style="margin-bottom:12px;"></div>
+    <div style="text-align:center;">
+      <button class="action-btn ghost" id="overdueSkipBtn" style="font-size:12px;">暂时不处理，先看看</button>
+    </div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const taskListEl = modal.querySelector('#overdueTaskList');
+
+  // 由于 grouped 是 renderList 内部的，需要外部可访问
+  // 改为在 modal 作用域维护
+  let _grouped = {};
+  function rebuildGrouped() {
+    _grouped = {};
+    overdue.filter(t => t.status === 'pending' && !t._handled).forEach(t => {
+      const key = t.parentTask || t.text;
+      if (!_grouped[key]) _grouped[key] = [];
+      _grouped[key].push(t);
+    });
+  }
+
+  function updateSelectAllCheckbox() {
+    const all = overdue.filter(t => t.status === 'pending' && !t._handled);
+    const allSelected = all.every(t => t._selected);
+    const selectAllCb = modal.querySelector('#overdueSelectAll');
+    if (selectAllCb) selectAllCb.checked = allSelected;
+  }
+
+  // 重新实现 renderList 使用 _grouped
+  function renderListV2() {
+    rebuildGrouped();
+    const remaining = overdue.filter(t => t.status === 'pending' && !t._handled);
+    if (remaining.length === 0) {
+      overlay.remove();
+      showToast('过期任务已处理完', 'success');
+      return false;
+    }
+
+    let html = '';
+    Object.entries(_grouped).forEach(([event, tasks]) => {
+      const allChecked = tasks.every(t => t._selected);
+      html += `<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg2);">
+          <input type="checkbox" class="overdue-group-cb" data-event="${escapeHtml(event)}" ${allChecked ? 'checked' : ''} style="width:14px;height:14px;">
+          <span style="font-size:12px;font-weight:600;">📋 ${escapeHtml(event)}</span>
+          <span style="font-size:10px;color:var(--muted);margin-left:auto;">${tasks.length}个步骤</span>
+        </div>`;
+      tasks.forEach(t => {
+        const timeLabel = t.scheduledTime ? `${t.scheduledDate || ''} ${t.scheduledTime}` : '';
+        html += `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px 6px 24px;border-top:1px solid var(--border);">
+          <input type="checkbox" class="overdue-task-cb" data-task-id="${t.id}" ${t._selected ? 'checked' : ''} style="width:14px;height:14px;">
+          <span style="font-size:12px;flex:1;">${escapeHtml(t.text)}</span>
+          ${timeLabel ? `<span style="font-size:10px;color:var(--muted);">⏰${escapeHtml(timeLabel)}</span>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    });
+
+    taskListEl.innerHTML = html;
+
+    // 绑定单个复选框
+    taskListEl.querySelectorAll('.overdue-task-cb').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const tid = Number(cb.dataset.taskId);
+        const task = overdue.find(t => t.id === tid);
+        if (task) task._selected = cb.checked;
+        updateSelectAllCheckbox();
+      });
+    });
+
+    // 绑定组复选框
+    taskListEl.querySelectorAll('.overdue-group-cb').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const eventName = cb.dataset.event;
+        const tasks = _grouped[eventName] || [];
+        const checked = cb.checked;
+        tasks.forEach(t => { t._selected = checked; });
+        tasks.forEach(t => {
+          const subCb = taskListEl.querySelector(`[data-task-id="${t.id}"]`);
+          if (subCb) subCb.checked = checked;
+        });
+        updateSelectAllCheckbox();
+      });
+    });
+
+    return true;
+  }
+
+  // 全选
+  modal.querySelector('#overdueSelectAll').addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    overdue.filter(t => t.status === 'pending' && !t._handled).forEach(t => { t._selected = checked; });
+    taskListEl.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = checked; });
+  });
+
+  // 获取选中的任务
+  function getSelected() {
+    return overdue.filter(t => t._selected && !t._handled && t.status === 'pending');
+  }
+
+  // 忽略：标记 reminded=true，保持 pending，但从弹窗列表移除
+  modal.querySelector('#overdueIgnoreBtn').addEventListener('click', () => {
+    const selected = getSelected();
+    if (selected.length === 0) { showToast('请先勾选任务', 'info'); return; }
+    const d = getData();
+    selected.forEach(t => {
+      const task = d.tasks.find(x => x.id === t.id);
+      if (task) task.reminded = true;
+      const orig = overdue.find(x => x.id === t.id);
+      if (orig) { orig._selected = false; orig._handled = true; }
+    });
+    saveData(d);
+    showToast(`${selected.length}个任务已忽略，可在待办清单中查看`, 'info');
+    renderListV2();
+  });
+
+  // 已完成：标记 done，从弹窗列表移除
+  modal.querySelector('#overdueDoneBtn').addEventListener('click', () => {
+    const selected = getSelected();
+    if (selected.length === 0) { showToast('请先勾选任务', 'info'); return; }
+    const d = getData();
+    selected.forEach(t => {
+      const task = d.tasks.find(x => x.id === t.id);
+      if (task) {
+        task.status = 'done';
+        task.completedAt = new Date().toISOString();
+      }
+      const orig = overdue.find(x => x.id === t.id);
+      if (orig) { orig._selected = false; orig._handled = true; }
+    });
+    saveData(d);
+    showToast(`${selected.length}个任务已标记完成 ✨`, 'success');
+    renderListV2();
+  });
+
+  // 后推：推到当前时间之后，从弹窗列表移除
+  modal.querySelector('#overduePostponeBtn').addEventListener('click', () => {
+    const selected = getSelected();
+    if (selected.length === 0) { showToast('请先勾选任务', 'info'); return; }
+    const d = getData();
+    const nowMs = Date.now();
+    selected.forEach(t => {
+      const task = d.tasks.find(x => x.id === t.id);
+      if (task && task.scheduledTime) {
+        let pushTo = new Date(nowMs + 30 * 60 * 1000); // 默认推到30分钟后
+        task.scheduledDate = formatDate(pushTo);
+        task.scheduledTime = formatTime(pushTo);
+        task.reminded = false;
+      }
+      const orig = overdue.find(x => x.id === t.id);
+      if (orig) { orig._selected = false; orig._handled = true; }
+    });
+    saveData(d);
+    showToast(`${selected.length}个任务已后推到30分钟后`, 'success');
+    renderListV2();
+  });
+
+  // 暂时不处理
+  modal.querySelector('#overdueSkipBtn').addEventListener('click', () => {
+    overlay.remove();
+  });
+
+  // 点击遮罩关闭
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  renderListV2();
+  return true;
+}
+
 function showApp() {
   console.log('[showApp] 显示主应用界面');
   $('#setupPage').style.display = 'none';
@@ -3603,6 +3996,8 @@ function showApp() {
   hideSkeleton();
   updateCounters();
   scheduleReminders();
+  // 检测过期任务，弹"欢迎回来"分批处理弹窗（非阻塞，用户可忽略）
+  handleOverdueTasks();
   
   // 初始化用户引导系统
   if (typeof initOnboarding === 'function') {
@@ -4003,7 +4398,9 @@ function renderDiaryList() {
           ${d.type === 'manual' ? `<button class="diary-edit" data-id="${d.id}" title="编辑" style="border:none;background:none;cursor:pointer;color:var(--muted);font-size:13px;">✏️</button>` : ''}
         </div>
         <div class="diary-item-content">${md(d.text || d.content || '')}</div>
-        ${d.aiResponse ? `<div class="diary-ai-response"><span class="diary-ai-icon">🌱</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div>` : (d.respondedAt === null && d.timestamp && (Date.now() - new Date(d.timestamp).getTime() < 60000) ? `<div class="diary-ai-response"><div style="display:flex;align-items:center;gap:6px;">${getMascotSmallHTML('正在回应你...')}</div></div>` : '')}
+        ${d.type === 'achievement' && d.aiResponse
+          ? `<button class="diary-praise-toggle" data-id="${d.id}" style="font-size:11px;color:var(--accent2);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;margin-top:4px;">📖 查看夸夸</button><div class="diary-praise-content" data-id="${d.id}" style="display:none;margin-top:6px;"><div class="diary-ai-response"><span class="diary-ai-icon">🌟</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div></div>`
+          : (d.aiResponse ? `<div class="diary-ai-response"><span class="diary-ai-icon">🌱</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div>` : (d.respondedAt === null && d.timestamp && (Date.now() - new Date(d.timestamp).getTime() < 60000) ? `<div class="diary-ai-response"><div style="display:flex;align-items:center;gap:6px;">${getMascotSmallHTML('正在回应你...')}</div></div>` : ''))}
       </div>`;
     });
     html += `</div>`;
@@ -4016,6 +4413,24 @@ function renderDiaryList() {
       e.stopPropagation();
       const id = Number(btn.dataset.id);
       openDiaryEditor(id);
+    });
+  });
+
+  // 绑定夸夸折叠按钮
+  container.querySelectorAll('.diary-praise-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const content = container.querySelector(`.diary-praise-content[data-id="${id}"]`);
+      if (content) {
+        if (content.style.display === 'none') {
+          content.style.display = 'block';
+          btn.textContent = '📖 收起夸夸';
+        } else {
+          content.style.display = 'none';
+          btn.textContent = '📖 查看夸夸';
+        }
+      }
     });
   });
 }
