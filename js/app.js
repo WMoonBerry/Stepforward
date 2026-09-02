@@ -3208,7 +3208,7 @@ function openListModal(type) {
   } else {
     sortedGroups.forEach(([parent, steps]) => {
       const parentEncoded = encodeURIComponent(parent);
-      const allChecked = batchMode && steps.every(t => selectedSet.has(t.id));
+      const allChecked = batchMode && steps.every(t => selectedSet.has(String(t.id)));
       html += `<div style="margin-bottom:16px;">
         <div class="parent-task-header" data-parent="${parentEncoded}" style="padding:8px 4px;${batchMode ? 'cursor:default;' : 'cursor:pointer;'}border-radius:8px;transition:background 0.2s;" ${batchMode ? '' : 'onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'transparent\'"'}>
           ${batchMode ? `<input type="checkbox" class="batch-group-cb" data-parent="${parentEncoded}" ${allChecked ? 'checked' : ''} style="width:14px;height:14px;margin-right:6px;vertical-align:middle;">` : ''}
@@ -3219,7 +3219,7 @@ function openListModal(type) {
       steps.forEach(t => {
         const isDone = t.status === 'done';
         const clickable = !isDone && type === 'pending' && !batchMode;
-        const isSelected = batchMode && selectedSet.has(t.id);
+        const isSelected = batchMode && selectedSet.has(String(t.id));
         html += `
           <div style="padding:8px 12px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--rule);">
             ${batchMode ? `<input type="checkbox" class="batch-step-cb" data-task-id="${t.id}" ${isSelected ? 'checked' : ''} style="width:16px;height:16px;flex-shrink:0;cursor:pointer;">` : `<div class="step-checkbox" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:5px;border:2px solid ${isDone ? 'var(--accent3)' : 'var(--accent)'};flex-shrink:0;display:flex;align-items:center;justify-content:center;${isDone ? 'background:var(--accent3);color:#fff;' : ''}${clickable ? 'cursor:pointer;' : ''}" title="${clickable ? '点击标记为完成' : ''}">${isDone ? '✓' : ''}</div>`}
@@ -3258,7 +3258,7 @@ function openListModal(type) {
     const countEl = $('#batchSelectedCount');
     if (countEl) countEl.textContent = `已选 ${selectedSet.size} 项`;
     const selectAllCb = $('#batchSelectAll');
-    if (selectAllCb) selectAllCb.checked = tasks.length > 0 && tasks.every(t => selectedSet.has(t.id));
+    if (selectAllCb) selectAllCb.checked = tasks.length > 0 && tasks.every(t => selectedSet.has(String(t.id)));
   }
 
   // 绑定清单中每个步骤的 ⋮ 按钮
@@ -3364,7 +3364,7 @@ function openListModal(type) {
     document.querySelectorAll('#listModalContent .batch-step-cb').forEach(function(cb) {
       cb.onclick = function(e) {
         e.stopPropagation();
-        const tid = cb.getAttribute('data-task-id');
+        const tid = String(cb.getAttribute('data-task-id'));
         if (tid) {
           if (cb.checked) {
             window._batchSelectedIds.add(tid);
@@ -3385,9 +3385,9 @@ function openListModal(type) {
         // 找到该组所有任务
         const groupTasks = tasks.filter(t => (t.parentTask || '未分类') === parentName);
         if (cb.checked) {
-          groupTasks.forEach(t => window._batchSelectedIds.add(t.id));
+          groupTasks.forEach(t => window._batchSelectedIds.add(String(t.id)));
         } else {
-          groupTasks.forEach(t => window._batchSelectedIds.delete(t.id));
+          groupTasks.forEach(t => window._batchSelectedIds.delete(String(t.id)));
         }
         updateBatchUI(tasks);
       };
@@ -3398,7 +3398,7 @@ function openListModal(type) {
     if (selectAllCb) {
       selectAllCb.onclick = function() {
         if (selectAllCb.checked) {
-          tasks.forEach(t => window._batchSelectedIds.add(t.id));
+          tasks.forEach(t => window._batchSelectedIds.add(String(t.id)));
         } else {
           window._batchSelectedIds.clear();
         }
@@ -3415,8 +3415,12 @@ function openListModal(type) {
         const d = getData();
         let removed = 0;
         window._batchSelectedIds.forEach(tid => {
-          const idx = d.tasks.findIndex(x => x.id === tid);
+          const idx = d.tasks.findIndex(x => String(x.id) === String(tid));
           if (idx > -1) {
+            // 联动清理该任务的情绪对话历史
+            if (Array.isArray(d.moods)) {
+              d.moods = d.moods.filter(function(m) { return m.taskId !== d.tasks[idx].id; });
+            }
             d.tasks.splice(idx, 1);
             removed++;
           }
@@ -3438,11 +3442,19 @@ function openListModal(type) {
         const now = new Date().toISOString();
         let doneCount = 0;
         window._batchSelectedIds.forEach(tid => {
-          const task = d.tasks.find(x => x.id === tid);
+          const task = d.tasks.find(x => String(x.id) === String(tid));
           if (task && task.status === 'pending') {
             task.status = 'done';
             task.completedAt = now;
             task.reminded = false;
+            // 写入成就日记
+            d.diary = [...(d.diary || []), {
+              id: 'diary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+              type: 'achievement',
+              date: todayDateStr(),
+              text: '完成了：' + (task.parentTask ? task.parentTask + ' · ' : '') + task.text,
+              timestamp: new Date().toISOString()
+            }];
             doneCount++;
           }
         });
@@ -3460,11 +3472,11 @@ function openListModal(type) {
     if (countEl) countEl.textContent = `已选 ${window._batchSelectedIds.size} 项`;
     const selectAllCb = $('#batchSelectAll');
     if (selectAllCb) {
-      selectAllCb.checked = allTasks.length > 0 && allTasks.every(t => window._batchSelectedIds.has(t.id));
+      selectAllCb.checked = allTasks.length > 0 && allTasks.every(t => window._batchSelectedIds.has(String(t.id)));
     }
     // 同步更新每个 checkbox 的勾选状态
     document.querySelectorAll('#listModalContent .batch-step-cb').forEach(function(cb) {
-      const tid = cb.getAttribute('data-task-id');
+      const tid = String(cb.getAttribute('data-task-id'));
       cb.checked = window._batchSelectedIds.has(tid);
     });
     // 同步更新每个组 checkbox
@@ -3472,7 +3484,7 @@ function openListModal(type) {
       const parentEncoded = cb.getAttribute('data-parent');
       const parentName = decodeURIComponent(parentEncoded);
       const groupTasks = allTasks.filter(t => (t.parentTask || '未分类') === parentName);
-      cb.checked = groupTasks.length > 0 && groupTasks.every(t => window._batchSelectedIds.has(t.id));
+      cb.checked = groupTasks.length > 0 && groupTasks.every(t => window._batchSelectedIds.has(String(t.id)));
     });
   }
 }
