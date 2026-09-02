@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // StepForward Demo · 主应用逻辑 v2.0.1
 // ============================================================
 // v2.0 更新：
@@ -1667,11 +1667,17 @@ function openParentTaskMenu(parentName, source) {
   `;
   } else {
     // 未完成：显示完整修改界面
-    // 找到第一个有时间的步骤，作为默认日期
+    // 找到第一个有时间的步骤，作为默认日期和参考时间
     const firstScheduledStep = steps.find(s => s.scheduledTime && s.status === 'pending');
     const defaultDate = firstScheduledStep && firstScheduledStep.scheduledDate
       ? firstScheduledStep.scheduledDate
       : formatDate(new Date());
+    const firstStepTime = firstScheduledStep && firstScheduledStep.scheduledTime
+      ? firstScheduledStep.scheduledTime
+      : '';
+    const firstStepDisplay = firstScheduledStep
+      ? `${formatScheduledDisplay(firstScheduledStep.scheduledDate, firstScheduledStep.scheduledTime)}`
+      : '暂无安排时间';
 
     parentBodyHtml = `
     <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
@@ -1680,6 +1686,9 @@ function openParentTaskMenu(parentName, source) {
       <div style="font-size:13px;font-weight:600;">${escapeHtml(parentName)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;">
         共 ${steps.length} 步 · 待办 ${pendingCount} · 已完成 ${doneCount}
+      </div>
+      <div style="font-size:11px;color:var(--accent);margin-top:6px;padding-top:6px;border-top:1px solid var(--rule);">
+        🕐 第一步：${escapeHtml(firstScheduledStep ? firstScheduledStep.text : '—')} · ${firstStepDisplay}
       </div>
     </div>
 
@@ -2618,7 +2627,13 @@ function closeEmotionModal() {
 /**
  * 关闭待办/已完成清单模态框
  */
-function closeListModal() { console.log('[closeListModal] 关闭清单模态框'); $('#listModal').classList.remove('show'); }
+function closeListModal() {
+  console.log('[closeListModal] 关闭清单模态框');
+  $('#listModal').classList.remove('show');
+  // 重置批量模式
+  window._listBatchMode = false;
+  if (window._batchSelectedIds) window._batchSelectedIds.clear();
+}
 
 // ===== 危机安全边界 =====
 
@@ -3185,30 +3200,36 @@ function openListModal(type) {
   });
 
   let html = '';
+  const batchMode = window._listBatchMode === true && type === 'pending';
+  const selectedSet = window._batchSelectedIds || new Set();
+
   if (tasks.length === 0) {
     html = `<p style="text-align:center;color:var(--muted);padding:20px;">${emptyText}</p>`;
   } else {
     sortedGroups.forEach(([parent, steps]) => {
       const parentEncoded = encodeURIComponent(parent);
+      const allChecked = batchMode && steps.every(t => selectedSet.has(t.id));
       html += `<div style="margin-bottom:16px;">
-        <div class="parent-task-header" data-parent="${parentEncoded}" style="padding:8px 4px;cursor:pointer;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
+        <div class="parent-task-header" data-parent="${parentEncoded}" style="padding:8px 4px;${batchMode ? 'cursor:default;' : 'cursor:pointer;'}border-radius:8px;transition:background 0.2s;" ${batchMode ? '' : 'onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'transparent\'"'}>
+          ${batchMode ? `<input type="checkbox" class="batch-group-cb" data-parent="${parentEncoded}" ${allChecked ? 'checked' : ''} style="width:14px;height:14px;margin-right:6px;vertical-align:middle;">` : ''}
           <span style="font-size:13px;font-weight:700;color:var(--accent);">${escapeHtml(parent)}</span>
           <span style="font-weight:400;opacity:0.7;font-size:11px;">(${steps.length}步)</span>
-          <span style="font-size:10px;color:var(--muted);margin-left:6px;opacity:0.6;">点击修改 ›</span>
+          ${batchMode ? '' : '<span style="font-size:10px;color:var(--muted);margin-left:6px;opacity:0.6;">点击修改 ›</span>'}
         </div>`;
       steps.forEach(t => {
         const isDone = t.status === 'done';
-        const clickable = !isDone && type === 'pending';
+        const clickable = !isDone && type === 'pending' && !batchMode;
+        const isSelected = batchMode && selectedSet.has(t.id);
         html += `
           <div style="padding:8px 12px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--rule);">
-            <div class="step-checkbox" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:5px;border:2px solid ${isDone ? 'var(--accent3)' : 'var(--accent)'};flex-shrink:0;display:flex;align-items:center;justify-content:center;${isDone ? 'background:var(--accent3);color:#fff;' : ''}${clickable ? 'cursor:pointer;' : ''}" title="${clickable ? '点击标记为完成' : ''}">${isDone ? '✓' : ''}</div>
+            ${batchMode ? `<input type="checkbox" class="batch-step-cb" data-task-id="${t.id}" ${isSelected ? 'checked' : ''} style="width:16px;height:16px;flex-shrink:0;cursor:pointer;">` : `<div class="step-checkbox" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:5px;border:2px solid ${isDone ? 'var(--accent3)' : 'var(--accent)'};flex-shrink:0;display:flex;align-items:center;justify-content:center;${isDone ? 'background:var(--accent3);color:#fff;' : ''}${clickable ? 'cursor:pointer;' : ''}" title="${clickable ? '点击标记为完成' : ''}">${isDone ? '✓' : ''}</div>`}
             <div style="flex:1;">
               <div style="font-size:12.5px;${isDone ? 'text-decoration:line-through;opacity:0.6;' : ''}">${escapeHtml(t.text)}</div>
               <div style="font-size:10.5px;color:var(--muted);margin-top:2px;">
                 ${formatScheduledDisplay(t.scheduledDate, t.scheduledTime)}${t.duration ? ` · ${t.duration}分钟` : ''}
               </div>
             </div>
-            <button class="menu-btn" style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" data-task-id="${t.id}" title="修改/删除">⋮</button>
+            ${batchMode ? '' : `<button class="menu-btn" style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" data-task-id="${t.id}" title="修改/删除">⋮</button>`}
           </div>`;
       });
       html += `</div>`;
@@ -3218,6 +3239,27 @@ function openListModal(type) {
   $('#listModalTitle').textContent = title;
   $('#listModalContent').innerHTML = html;
   $('#listModal').classList.add('show');
+
+  // 批量模式 UI 控制
+  const batchBtn = $('#batchModeBtn');
+  const filterBtnsEl = $('#listFilterBtns');
+  const batchActionBar = $('#batchActionBar');
+  if (batchBtn) {
+    batchBtn.textContent = batchMode ? '退出批量处理' : '批量处理';
+    batchBtn.style.display = type === 'pending' ? '' : 'none';
+  }
+  if (filterBtnsEl) {
+    filterBtnsEl.style.display = batchMode ? 'none' : 'flex';
+  }
+  if (batchActionBar) {
+    batchActionBar.style.display = batchMode ? 'block' : 'none';
+  }
+  if (batchMode) {
+    const countEl = $('#batchSelectedCount');
+    if (countEl) countEl.textContent = `已选 ${selectedSet.size} 项`;
+    const selectAllCb = $('#batchSelectAll');
+    if (selectAllCb) selectAllCb.checked = tasks.length > 0 && tasks.every(t => selectedSet.has(t.id));
+  }
 
   // 绑定清单中每个步骤的 ⋮ 按钮
   console.log('[openListModal] 开始绑定 ⋮ 按钮，数量:', document.querySelectorAll('#listModalContent .menu-btn').length);
@@ -3299,6 +3341,139 @@ function openListModal(type) {
         showToast('请选择开始和结束日期', 'error');
       }
     };
+  }
+
+  // ========== 批量处理模式 ==========
+  if (type === 'pending') {
+    // 初始化选中集合
+    if (!window._batchSelectedIds) window._batchSelectedIds = new Set();
+
+    // 批量处理按钮
+    const batchBtn = $('#batchModeBtn');
+    if (batchBtn) {
+      batchBtn.onclick = function() {
+        window._listBatchMode = !window._listBatchMode;
+        if (!window._listBatchMode) {
+          window._batchSelectedIds.clear();
+        }
+        openListModal(currentListType);
+      };
+    }
+
+    // 步骤 checkbox 点击
+    document.querySelectorAll('#listModalContent .batch-step-cb').forEach(function(cb) {
+      cb.onclick = function(e) {
+        e.stopPropagation();
+        const tid = cb.getAttribute('data-task-id');
+        if (tid) {
+          if (cb.checked) {
+            window._batchSelectedIds.add(tid);
+          } else {
+            window._batchSelectedIds.delete(tid);
+          }
+          updateBatchUI(tasks);
+        }
+      };
+    });
+
+    // 事件组 checkbox 点击
+    document.querySelectorAll('#listModalContent .batch-group-cb').forEach(function(cb) {
+      cb.onclick = function(e) {
+        e.stopPropagation();
+        const parentEncoded = cb.getAttribute('data-parent');
+        const parentName = decodeURIComponent(parentEncoded);
+        // 找到该组所有任务
+        const groupTasks = tasks.filter(t => (t.parentTask || '未分类') === parentName);
+        if (cb.checked) {
+          groupTasks.forEach(t => window._batchSelectedIds.add(t.id));
+        } else {
+          groupTasks.forEach(t => window._batchSelectedIds.delete(t.id));
+        }
+        updateBatchUI(tasks);
+      };
+    });
+
+    // 全选 checkbox
+    const selectAllCb = $('#batchSelectAll');
+    if (selectAllCb) {
+      selectAllCb.onclick = function() {
+        if (selectAllCb.checked) {
+          tasks.forEach(t => window._batchSelectedIds.add(t.id));
+        } else {
+          window._batchSelectedIds.clear();
+        }
+        updateBatchUI(tasks);
+      };
+    }
+
+    // 批量删除
+    const batchDeleteBtn = $('#batchDeleteBtn');
+    if (batchDeleteBtn) {
+      batchDeleteBtn.onclick = function() {
+        const count = window._batchSelectedIds.size;
+        if (count === 0) { showToast('请先勾选任务', 'info'); return; }
+        const d = getData();
+        let removed = 0;
+        window._batchSelectedIds.forEach(tid => {
+          const idx = d.tasks.findIndex(x => x.id === tid);
+          if (idx > -1) {
+            d.tasks.splice(idx, 1);
+            removed++;
+          }
+        });
+        saveData(d);
+        window._batchSelectedIds.clear();
+        showToast(`已删除 ${removed} 个任务`, 'success');
+        openListModal(currentListType);
+      };
+    }
+
+    // 批量标记已完成
+    const batchDoneBtn = $('#batchDoneBtn');
+    if (batchDoneBtn) {
+      batchDoneBtn.onclick = function() {
+        const count = window._batchSelectedIds.size;
+        if (count === 0) { showToast('请先勾选任务', 'info'); return; }
+        const d = getData();
+        const now = new Date().toISOString();
+        let doneCount = 0;
+        window._batchSelectedIds.forEach(tid => {
+          const task = d.tasks.find(x => x.id === tid);
+          if (task && task.status === 'pending') {
+            task.status = 'done';
+            task.completedAt = now;
+            task.reminded = false;
+            doneCount++;
+          }
+        });
+        saveData(d);
+        window._batchSelectedIds.clear();
+        showToast(`${doneCount} 个任务已完成 ✨`, 'success');
+        openListModal(currentListType);
+      };
+    }
+  }
+
+  // 更新批量模式 UI（不重渲染，只更新计数和全选状态）
+  function updateBatchUI(allTasks) {
+    const countEl = $('#batchSelectedCount');
+    if (countEl) countEl.textContent = `已选 ${window._batchSelectedIds.size} 项`;
+    const selectAllCb = $('#batchSelectAll');
+    if (selectAllCb) {
+      selectAllCb.checked = allTasks.length > 0 && allTasks.every(t => window._batchSelectedIds.has(t.id));
+    }
+    // 同步更新每个 checkbox 的勾选状态
+    document.querySelectorAll('#listModalContent .batch-step-cb').forEach(function(cb) {
+      const tid = cb.getAttribute('data-task-id');
+      cb.checked = window._batchSelectedIds.has(tid);
+    });
+    // 同步更新每个组 checkbox
+    document.querySelectorAll('#listModalContent .batch-group-cb').forEach(function(cb) {
+      const parentEncoded = cb.getAttribute('data-parent');
+      const parentName = decodeURIComponent(parentEncoded);
+      const groupTasks = allTasks.filter(t => (t.parentTask || '未分类') === parentName);
+      cb.checked = groupTasks.length > 0 && groupTasks.every(t => window._batchSelectedIds.has(t.id));
+    });
   }
 }
 
@@ -3753,6 +3928,7 @@ function showBedtimeConfirm() {
  * 检测过期任务并弹"欢迎回来"分批处理弹窗
  * 在 showApp() 中调用，renderNextTask/scheduleReminders 之前执行
  */
+
 function handleOverdueTasks() {
   const data = getData();
   const now = new Date();
@@ -3797,9 +3973,9 @@ function handleOverdueTasks() {
       <input type="checkbox" id="overdueSelectAll" style="width:16px;height:16px;">
       <label for="overdueSelectAll" style="font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;">全选</label>
       <div style="flex:1;"></div>
-      <button class="action-btn ghost tiny" id="overdueIgnoreBtn" style="font-size:11px;">忽略</button>
+      <button class="action-btn danger tiny" id="overdueDeleteBtn" style="font-size:11px;">删除</button>
+      <button class="action-btn ghost tiny" id="overdueIgnoreBtn" style="font-size:11px;">先不动</button>
       <button class="action-btn secondary tiny" id="overdueDoneBtn" style="font-size:11px;">已完成</button>
-      <button class="action-btn primary tiny" id="overduePostponeBtn" style="font-size:11px;">后推</button>
     </div>
     <div id="overdueTaskList" style="margin-bottom:12px;"></div>
     <div style="text-align:center;">
@@ -3905,7 +4081,7 @@ function handleOverdueTasks() {
     return overdue.filter(t => t._selected && !t._handled && t.status === 'pending');
   }
 
-  // 忽略：标记 reminded=true，保持 pending，但从弹窗列表移除
+  // 先不动：标记 reminded=true，保持 pending，但从弹窗列表移除
   modal.querySelector('#overdueIgnoreBtn').addEventListener('click', () => {
     const selected = getSelected();
     if (selected.length === 0) { showToast('请先勾选任务', 'info'); return; }
@@ -3917,7 +4093,23 @@ function handleOverdueTasks() {
       if (orig) { orig._selected = false; orig._handled = true; }
     });
     saveData(d);
-    showToast(`${selected.length}个任务已忽略，可在待办清单中查看`, 'info');
+    showToast(`${selected.length}个任务先不动，可在待办清单中查看`, 'info');
+    renderListV2();
+  });
+
+  // 删除：从任务列表中移除
+  modal.querySelector('#overdueDeleteBtn').addEventListener('click', () => {
+    const selected = getSelected();
+    if (selected.length === 0) { showToast('请先勾选任务', 'info'); return; }
+    const d = getData();
+    selected.forEach(t => {
+      const idx = d.tasks.findIndex(x => x.id === t.id);
+      if (idx > -1) d.tasks.splice(idx, 1);
+      const orig = overdue.find(x => x.id === t.id);
+      if (orig) { orig._selected = false; orig._handled = true; }
+    });
+    saveData(d);
+    showToast(`${selected.length}个任务已删除`, 'success');
     renderListV2();
   });
 
@@ -3937,28 +4129,6 @@ function handleOverdueTasks() {
     });
     saveData(d);
     showToast(`${selected.length}个任务已标记完成 ✨`, 'success');
-    renderListV2();
-  });
-
-  // 后推：推到当前时间之后，从弹窗列表移除
-  modal.querySelector('#overduePostponeBtn').addEventListener('click', () => {
-    const selected = getSelected();
-    if (selected.length === 0) { showToast('请先勾选任务', 'info'); return; }
-    const d = getData();
-    const nowMs = Date.now();
-    selected.forEach(t => {
-      const task = d.tasks.find(x => x.id === t.id);
-      if (task && task.scheduledTime) {
-        let pushTo = new Date(nowMs + 30 * 60 * 1000); // 默认推到30分钟后
-        task.scheduledDate = formatDate(pushTo);
-        task.scheduledTime = formatTime(pushTo);
-        task.reminded = false;
-      }
-      const orig = overdue.find(x => x.id === t.id);
-      if (orig) { orig._selected = false; orig._handled = true; }
-    });
-    saveData(d);
-    showToast(`${selected.length}个任务已后推到30分钟后`, 'success');
     renderListV2();
   });
 
