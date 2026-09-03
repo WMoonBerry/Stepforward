@@ -50,6 +50,21 @@ function saveData(data) {
 }
 
 /**
+ * 同步保存数据到 localStorage（绕过节流，立即写入）
+ * 用于批量操作等需要立即生效的场景
+ * @param {Object} data - 要保存的数据对象
+ */
+function saveDataSync(data) {
+  if (window._saveDataTimer) {
+    clearTimeout(window._saveDataTimer);
+    window._saveDataTimer = null;
+  }
+  window._saveDataPending = null;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  console.log('[saveDataSync] 同步写入完成，任务数:', data.tasks.length);
+}
+
+/**
  * 从 localStorage 读取用户设置，与默认值合并后返回
  * @returns {Object} 包含所有设置项的配置对象
  */
@@ -658,7 +673,7 @@ function saveBreakdownResult(parsed) {
     });
   });
 
-  saveData(data);
+  saveDataSync(data);
   updateCounters();
   scheduleReminders();
 
@@ -996,10 +1011,11 @@ function renderNextTask() {
  * @param {number} minutes - 顺延分钟数（正数后推，负数提前）
  * @returns {number} 实际被顺延的步骤数量
  */
-function shiftSiblingSteps(taskId, minutes) {
+function shiftSiblingSteps(taskId, minutes, options = {}) {
   if (minutes === 0) return 0;
   taskId = Number(taskId);
-  const d = getData();
+  const autoSave = options.save !== false;
+  const d = options.data || getData();
   const task = d.tasks.find(t => t.id === taskId);
   console.log('[shiftSiblingSteps] taskId:', taskId, 'minutes:', minutes, 'task:', task ? task.text : 'not found', 'parentTask:', task ? task.parentTask : 'none');
   if (!task || !task.parentTask) return 0;
@@ -1029,7 +1045,7 @@ function shiftSiblingSteps(taskId, minutes) {
   });
 
   console.log('[shiftSiblingSteps] total shifted:', count);
-  if (count > 0) saveData(d);
+  if (count > 0 && autoSave) saveData(d);
   return count;
 }
 
@@ -1048,7 +1064,7 @@ function shiftAllSubsequentTasks(anchorTaskId, minutes, options = {}) {
   const useEndTime = options.useEndTime !== false;
   const autoSave = options.save !== false;
 
-  const d = getData();
+  const d = options.data || getData();
   const anchorTask = d.tasks.find(t => t.id === anchorTaskId);
   if (!anchorTask || !anchorTask.scheduledTime) {
     console.warn('[shiftAllSubsequentTasks] 锚点任务不存在或无安排时间');
@@ -1239,7 +1255,6 @@ function openTaskMenu(taskId, source) {
       t.duration = newDuration;
       t.scheduledTime = newTime;
       t.reminded = false;
-      saveData(d);
       console.log('[openTaskMenu] 任务已更新');
 
       // 如果时间或时长有变化
@@ -1247,16 +1262,18 @@ function openTaskMenu(taskId, source) {
       let crossEventResult = { shiftedCount: 0, eventCount: 0 };
 
       if (totalShiftMinutes !== 0) {
-        // 先顺延同事件后续步骤
-        siblingShifted = shiftSiblingSteps(taskId, totalShiftMinutes);
+        // 先顺延同事件后续步骤（传入同一 data 对象，不单独保存）
+        siblingShifted = shiftSiblingSteps(taskId, totalShiftMinutes, { data: d, save: false });
         console.log('[openTaskMenu] 已顺延同事件后续', siblingShifted, '步');
 
-        // 跨事件联动
+        // 跨事件联动（传入同一 data 对象，不单独保存）
         if (shiftSubsequent) {
-          crossEventResult = shiftAllSubsequentTasks(taskId, totalShiftMinutes, { useEndTime: true, save: true });
+          crossEventResult = shiftAllSubsequentTasks(taskId, totalShiftMinutes, { useEndTime: true, data: d, save: false });
         }
       }
 
+      // 统一同步保存所有修改
+      saveDataSync(d);
       scheduleReminders();
 
       // 生成提示消息
@@ -1275,6 +1292,7 @@ function openTaskMenu(taskId, source) {
       overlay.remove();
       if (source === 'pending' || source === 'done') {
         openListModal(source);
+        renderNextTask(); // 同步刷新主界面卡片
       } else {
         renderNextTask();
       }
@@ -1295,7 +1313,7 @@ function openTaskMenu(taskId, source) {
           scheduledTime: task.scheduledTime,
         }];
         overlay.remove();
-        reAddStepsToPending(stepCopy, task.parentTask);
+        reAddStepsToPending(stepCopy, task.parentTask, source);
       });
     };
   }
@@ -1314,12 +1332,13 @@ function openTaskMenu(taskId, source) {
         if (Array.isArray(d.moods)) {
           d.moods = d.moods.filter(function(m) { return m.taskId !== taskId; });
         }
-        saveData(d);
+        saveDataSync(d);
         console.log('[openTaskMenu] 任务已删除，剩余任务数:', d.tasks.length);
         showToast('已删除', 'success');
         overlay.remove();
         if (source === 'pending' || source === 'done') {
           openListModal(source);
+          renderNextTask(); // 同步刷新主界面卡片
         } else {
           renderNextTask();
         }
@@ -1554,11 +1573,11 @@ ${conflictsDesc}
         return;
       }
 
-      // 删除冲突的旧任务
+      // 删除冲突的旧任务（同步保存，确保后续 saveBreakdownResult 读到已删除的数据）
       const d = getData();
       const conflictIds = conflicts.map(c => (c.existingTask && c.existingTask.id) || c.id).filter(Boolean);
       d.tasks = d.tasks.filter(t => !conflictIds.includes(t.id));
-      saveData(d);
+      saveDataSync(d);
 
       // 保存 AI 重新安排的结果
       saveBreakdownResult(parsed);
@@ -1584,8 +1603,8 @@ ${conflictsDesc}
  * @param {Array<Object>} steps - 要加入的步骤数组
  * @param {string} parentTaskName - 母任务名称
  */
-function reAddStepsToPending(steps, parentTaskName) {
-  console.log('[reAddStepsToPending] 重新加入待办，步骤数:', steps.length, '事件:', parentTaskName);
+function reAddStepsToPending(steps, parentTaskName, source) {
+  console.log('[reAddStepsToPending] 重新加入待办，步骤数:', steps.length, '事件:', parentTaskName, '来源:', source);
 
   const conflicts = findTimeConflicts(steps);
 
@@ -1609,11 +1628,15 @@ function reAddStepsToPending(steps, parentTaskName) {
         reminded: false,
       });
     });
-    saveData(d);
+    saveDataSync(d);
     renderNextTask();
     updateCounters();
     scheduleReminders();
     showToast(`已重新加入 ${steps.length} 个步骤到待办`, 'success');
+    // 如果是从已完成清单触发的，刷新已完成清单
+    if (source === 'done') {
+      openListModal('done');
+    }
   }
 }
 
@@ -1819,16 +1842,17 @@ function openParentTaskMenu(parentName, source) {
         }
       });
 
-      saveData(d);
       console.log('[openParentTaskMenu] 本事件修改完成，修改了', modifiedCount, '个步骤');
 
-      // 跨事件联动：顺延后续所有任务
+      // 跨事件联动：顺延后续所有任务（传入同一 data 对象，不单独保存）
       let crossEventResult = { shiftedCount: 0, eventCount: 0 };
       if (shiftSubsequent && lastModifiedStepId && (dayDiff !== 0 || timeShiftMinutes !== 0)) {
         const totalShift = dayDiff * 24 * 60 + timeShiftMinutes;
-        crossEventResult = shiftAllSubsequentTasks(lastModifiedStepId, totalShift, { useEndTime: true, save: true });
+        crossEventResult = shiftAllSubsequentTasks(lastModifiedStepId, totalShift, { useEndTime: true, data: d, save: false });
       }
 
+      // 统一同步保存所有修改
+      saveDataSync(d);
       scheduleReminders();
 
       // 生成提示消息
@@ -1841,6 +1865,7 @@ function openParentTaskMenu(parentName, source) {
       overlay.remove();
       if (source === 'pending' || source === 'done') {
         openListModal(source);
+        renderNextTask(); // 同步刷新主界面卡片
       } else {
         renderNextTask();
       }
@@ -1862,7 +1887,7 @@ function openParentTaskMenu(parentName, source) {
           scheduledTime: s.scheduledTime,
         }));
         overlay.remove();
-        reAddStepsToPending(stepsCopy, parentName);
+        reAddStepsToPending(stepsCopy, parentName, source);
       });
     };
   }
@@ -1875,12 +1900,13 @@ function openParentTaskMenu(parentName, source) {
       console.log('[openParentTaskMenu] 用户确认删除整件事');
       const d = getData();
       d.tasks = d.tasks.filter(t => t.parentTask !== parentName);
-      saveData(d);
+      saveDataSync(d);
       console.log('[openParentTaskMenu] 整件事已删除，剩余任务数:', d.tasks.length);
       showToast('已删除整件事', 'success');
       overlay.remove();
       if (source === 'pending' || source === 'done') {
         openListModal(source);
+        renderNextTask(); // 同步刷新主界面卡片
       } else {
         renderNextTask();
       }
@@ -1910,7 +1936,7 @@ function openParentTaskMenu(parentName, source) {
           completedCount++;
         }
       });
-      saveData(d);
+      saveDataSync(d);
       console.log('[openParentTaskMenu] 整件事完成，标记了', completedCount, '个步骤');
       playSmallCelebration();
       playNotificationSound();
@@ -1952,6 +1978,7 @@ function openParentTaskMenu(parentName, source) {
       overlay.remove();
       if (source === 'pending' || source === 'done') {
         openListModal(source);
+        renderNextTask(); // 同步刷新主界面卡片
       } else {
         renderNextTask();
       }
@@ -1984,7 +2011,7 @@ async function markDone(taskId) {
   task.completedAt = new Date().toISOString();
   const _diaryId = Date.now();
   data.diary = [...(data.diary || []), { id: _diaryId, type: 'achievement', date: todayDateStr(), text: `完成了：${task.parentTask ? task.parentTask + ' · ' : ''}${task.text}`, timestamp: new Date().toISOString() }];
-  saveData(data);
+  saveDataSync(data);
 
   // 行为画像埋点
   try {
@@ -2167,7 +2194,7 @@ function markDoneFromList(taskId) {
     t2.completedAt = new Date().toISOString();
     const _diaryId2 = Date.now();
     d2.diary = [...(d2.diary || []), { id: _diaryId2, type: 'achievement', date: todayDateStr(), text: '完成了：' + (t2.parentTask ? t2.parentTask + ' · ' : '') + t2.text, timestamp: new Date().toISOString() }];
-    saveData(d2);
+    saveDataSync(d2);
 
     // 行为画像埋点
     try {
@@ -2215,6 +2242,7 @@ function markDoneFromList(taskId) {
 
     // 刷新清单
     openListModal('pending');
+    renderNextTask(); // 同步刷新主界面卡片
     updateCounters();
   });
 }
@@ -3043,15 +3071,15 @@ function doReschedule(minutes) {
     console.log('[doReschedule] 当前任务无安排时间，不顺延自身');
   }
 
-  saveData(data);
-
-  // 顺延同事件的后续步骤
+  // 顺延同事件的后续步骤（传入同一 data 对象，不单独保存）
   let shiftedCount = 0;
   if (task) {
-    shiftedCount = shiftSiblingSteps(currentWaitTaskId, minutes);
+    shiftedCount = shiftSiblingSteps(currentWaitTaskId, minutes, { data: data, save: false });
     console.log('[doReschedule] 同事件后续步骤顺延数:', shiftedCount);
   }
 
+  // 统一同步保存所有修改
+  saveDataSync(data);
   renderNextTask();
   scheduleReminders();
   updateCounters();
@@ -3216,17 +3244,33 @@ function openListModal(type) {
           <span style="font-weight:400;opacity:0.7;font-size:11px;">(${steps.length}步)</span>
           ${batchMode ? '' : '<span style="font-size:10px;color:var(--muted);margin-left:6px;opacity:0.6;">点击修改 ›</span>'}
         </div>`;
-      steps.forEach(t => {
+      steps.forEach((t, idx) => {
         const isDone = t.status === 'done';
         const clickable = !isDone && type === 'pending' && !batchMode;
         const isSelected = batchMode && selectedSet.has(String(t.id));
+
+        // 动态计算步骤时长：待办清单中显示与同事件内下一步骤开始时间的实际间隔
+        // 最后一步或无法计算时回退到存储的时长
+        let durationLabel = t.duration ? ` · ${t.duration}分钟` : '';
+        if (type === 'pending' && t.scheduledTime) {
+          const nextStep = steps[idx + 1];
+          if (nextStep && nextStep.scheduledTime) {
+            const curTime = parseScheduledDateTime(t.scheduledDate, t.scheduledTime);
+            const nextTime = parseScheduledDateTime(nextStep.scheduledDate, nextStep.scheduledTime);
+            if (curTime && nextTime) {
+              const gapMinutes = Math.round((nextTime - curTime) / 60000);
+              if (gapMinutes > 0) durationLabel = ` · ${gapMinutes}分钟`;
+            }
+          }
+        }
+
         html += `
           <div style="padding:8px 12px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--rule);">
             ${batchMode ? `<input type="checkbox" class="batch-step-cb" data-task-id="${t.id}" ${isSelected ? 'checked' : ''} style="width:16px;height:16px;flex-shrink:0;cursor:pointer;">` : `<div class="step-checkbox" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:5px;border:2px solid ${isDone ? 'var(--accent3)' : 'var(--accent)'};flex-shrink:0;display:flex;align-items:center;justify-content:center;${isDone ? 'background:var(--accent3);color:#fff;' : ''}${clickable ? 'cursor:pointer;' : ''}" title="${clickable ? '点击标记为完成' : ''}">${isDone ? '✓' : ''}</div>`}
             <div style="flex:1;">
               <div style="font-size:12.5px;${isDone ? 'text-decoration:line-through;opacity:0.6;' : ''}">${escapeHtml(t.text)}</div>
               <div style="font-size:10.5px;color:var(--muted);margin-top:2px;">
-                ${formatScheduledDisplay(t.scheduledDate, t.scheduledTime)}${t.duration ? ` · ${t.duration}分钟` : ''}
+                ${formatScheduledDisplay(t.scheduledDate, t.scheduledTime)}${durationLabel}
               </div>
             </div>
             ${batchMode ? '' : `<button class="menu-btn" style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" data-task-id="${t.id}" title="修改/删除">⋮</button>`}
@@ -3425,10 +3469,12 @@ function openListModal(type) {
             removed++;
           }
         });
-        saveData(d);
+        saveDataSync(d);
         window._batchSelectedIds.clear();
         showToast(`已删除 ${removed} 个任务`, 'success');
         openListModal(currentListType);
+        renderNextTask(); // 同步刷新主界面卡片
+        updateCounters();
       };
     }
 
@@ -3458,10 +3504,13 @@ function openListModal(type) {
             doneCount++;
           }
         });
-        saveData(d);
+        saveDataSync(d);
         window._batchSelectedIds.clear();
         showToast(`${doneCount} 个任务已完成 ✨`, 'success');
+        if (doneCount > 0) playSmallCelebration();
         openListModal(currentListType);
+        renderNextTask(); // 同步刷新主界面卡片
+        updateCounters();
       };
     }
   }
@@ -4120,9 +4169,10 @@ function handleOverdueTasks() {
       const orig = overdue.find(x => x.id === t.id);
       if (orig) { orig._selected = false; orig._handled = true; }
     });
-    saveData(d);
+    saveDataSync(d);
     showToast(`${selected.length}个任务已删除`, 'success');
     renderListV2();
+    updateCounters();
   });
 
   // 已完成：标记 done，从弹窗列表移除
@@ -4139,9 +4189,10 @@ function handleOverdueTasks() {
       const orig = overdue.find(x => x.id === t.id);
       if (orig) { orig._selected = false; orig._handled = true; }
     });
-    saveData(d);
+    saveDataSync(d);
     showToast(`${selected.length}个任务已标记完成 ✨`, 'success');
     renderListV2();
+    updateCounters();
   });
 
   // 暂时不处理
