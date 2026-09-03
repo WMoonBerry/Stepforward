@@ -81,7 +81,7 @@ const TOUR_STEPS = [
   {
     target: '#settingsBtn',
     title: '所有的功能设置都在这里，让我更贴心地为你服务~',
-    content: '可以更改我对你的称呼、允许安排任务的工作时间、皮肤、吉祥物',
+    content: '可以更改我对你的称呼、任务的开始安排与准备休息时间、皮肤、吉祥物',
     position: 'bottom'
   },
   {

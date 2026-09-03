@@ -5,7 +5,7 @@
 //   - 主界面重构：只显示下一个待办
 //   - 待办/已完成按大任务分组
 //   - 步骤修改/删除功能（⋮ 按钮）
-//   - 多任务独立拆解 + 工作时间约束
+//   - 多任务独立拆解 + 「开始安排/准备休息」时间边界约束
 //   - 多角色 AI 调用
 //   - 语音输入 + 音频输出
 //   - 角色气质自定义设置
@@ -65,28 +65,49 @@ function saveDataSync(data) {
 }
 
 /**
+ * 迁移旧版时间设置：旧版 workStart/workEnd 为整数小时（如 9 / 18），
+ * 新版改为 "HH:MM" 字符串以支持半小时值（如 22:30）。
+ * 旧默认值（workStart=9、workEnd=18）按新默认值处理（09:00 / 22:30）；
+ * 其他整数值视为用户自定义，转换为整点 "HH:00"。
+ * @param {Object} s - 设置对象（原地修改）
+ */
+function normalizeLegacyWorkSettings(s) {
+  const toTimeStr = (v, legacyDefault, fallback) => {
+    if (typeof v === 'number' && !isNaN(v)) {
+      if (v === legacyDefault) return fallback; // 旧默认值 → 新默认值
+      return String(Math.floor(v)).padStart(2, '0') + ':00';
+    }
+    if (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim())) return v.trim();
+    return fallback;
+  };
+  s.workStart = toTimeStr(s.workStart, 9, '09:00');
+  s.workEnd = toTimeStr(s.workEnd, 18, '22:30');
+}
+
+/**
  * 从 localStorage 读取用户设置，与默认值合并后返回
  * @returns {Object} 包含所有设置项的配置对象
  */
 function getSettings() {
+  const defaults = {
+    userName: '', autoReschedule: true, workStart: '09:00', workEnd: '22:30',
+    remindIntensity: 'standard', soundEnabled: true, voiceEnabled: true,
+    personaAge: '', personaGender: '', personaStyle: '', personaRelation: '',
+    lunchStart: '12:00', lunchDuration: 90,
+    dinnerStart: '18:00', dinnerDuration: 90,
+    theme: 'default', themeMode: 'system',
+    diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true,
+    mascot: 'cat'
+  };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    const defaults = {
-      userName: '', autoReschedule: true, workStart: 9, workEnd: 18,
-      remindIntensity: 'standard', soundEnabled: true, voiceEnabled: true,
-      personaAge: '', personaGender: '', personaStyle: '', personaRelation: '',
-      lunchStart: '12:00', lunchDuration: 90,
-      dinnerStart: '18:00', dinnerDuration: 90,
-      theme: 'default', themeMode: 'system',
-      diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true,
-      mascot: 'cat'
-    };
     const settings = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    normalizeLegacyWorkSettings(settings);
     console.log('[getSettings] 读取设置完成，userName:', settings.userName || '(未设置)');
     return settings;
   } catch (e) {
     console.warn('[getSettings] 读取设置失败，返回默认值:', e);
-    return { userName: '', autoReschedule: true, workStart: 9, workEnd: 18, remindIntensity: 'standard', soundEnabled: true, voiceEnabled: true, personaAge: '', personaGender: '', personaStyle: '', personaRelation: '', lunchStart: '12:00', lunchDuration: 90, dinnerStart: '18:00', dinnerDuration: 90, theme: 'default', themeMode: 'system', diaryAIResponse: true, bedtimeReminder: false, bedtimeTime: '22:30', diaryCardVisual: true, mascot: 'cat' };
+    return { ...defaults };
   }
 }
 
@@ -472,6 +493,10 @@ let currentListType = 'pending';
  * 在 AI 返回拆解结果后，用硬代码做最后一道防线：
  * 1. 吃饭/睡觉类任务被排出对应时段 → 修正
  * 2. 用户说了"现在/马上"但 AI 没听 → 第一个步骤时间修正为当前时间
+ * 3. 非例外任务早于「开始安排」时间 → 修正到「开始安排」
+ * 4. 非生活类任务晚于或等于「准备休息」时间 → 顺延到次日「开始安排」
+ * 说明：与既有校验1/2/3保持同构，仅校验并修正每个任务的第一步，
+ * 后续步骤交由 AI 按规则顺延，避免前端重排整链引入回归。
  */
 function applyScheduleFallback(parsed, userInput, settings) {
   const now = new Date();
@@ -482,6 +507,9 @@ function applyScheduleFallback(parsed, userInput, settings) {
   const mealKeywords = ['吃饭', '午饭', '午餐', '晚饭', '晚餐', '用餐', '干饭', '觅食', '吃饭了', '饭点'];
   const sleepKeywords = ['睡觉', '午睡', '午休', '休息', '入睡', '睡觉了', 'nap'];
   const nowKeywords = ['现在', '马上', '立刻', '立马', '此刻'];
+  // 例外任务关键词：可安排在「开始安排」之前
+  const breakfastKeywords = ['早餐', '早饭', '早点', '吃早'];
+  const careKeywords = ['刷牙', '洗澡', '泡澡', '洗漱', '护肤', '洗脸', '敷面膜', '吹头', '吹头发'];
 
   // 用餐时段（从设置读取）
   const lunchStart = settings?.lunchStart || '12:00';
@@ -513,12 +541,39 @@ function applyScheduleFallback(parsed, userInput, settings) {
   const userSaidNow = nowKeywords.some(kw => userInput.includes(kw));
   const userLower = userInput.toLowerCase();
 
+  // 「开始安排」/「准备休息」时间（支持 "HH:MM"，兼容旧版整数小时）
+  const normalizeWorkTime = (v, fallback) => {
+    if (typeof v === 'number' && !isNaN(v)) return String(Math.floor(v)).padStart(2, '0') + ':00';
+    if (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim())) return v.trim();
+    return fallback;
+  };
+  const planStart = normalizeWorkTime(settings?.workStart, '09:00');
+  const planEnd = normalizeWorkTime(settings?.workEnd, '22:30');
+  const planStartMin = toMinutes(planStart);
+  const planEndMin = toMinutes(planEnd);
+
+  // 用户是否明确表达了时间意图：具体时间点 / 相对时间（提前、推迟、xx分钟后等）
+  const timeIntentPattern = /\d{1,2}\s*[点:：]|\d{1,2}:\d{2}|半小时后|\d+小时后|\d+分钟后|提前|推迟|延后|延到|改到/;
+  const userHasTimeIntent = userSaidNow || timeIntentPattern.test(userInput);
+
+  // 顺延到次日的日期计算（YYYY-MM-DD）
+  const nextDate = (dateStr) => {
+    const base = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? new Date(dateStr + 'T00:00:00') : now;
+    const d = new Date(base);
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+
   let corrected = 0;
 
   parsed.tasks.forEach(task => {
     const taskName = (task.parentTask || '').toLowerCase();
     const isMealTask = mealKeywords.some(kw => taskName.includes(kw));
     const isSleepTask = sleepKeywords.some(kw => taskName.includes(kw));
+    // 例外任务：早餐与个人护理不受「开始安排」/「准备休息」限制
+    const isBreakfastTask = breakfastKeywords.some(kw => taskName.includes(kw));
+    const isCareTask = careKeywords.some(kw => taskName.includes(kw));
+    const isExceptionTask = isBreakfastTask || isCareTask;
 
     // 校验1：吃饭类任务应安排在用餐时段
     if (isMealTask && task.steps && task.steps.length > 0) {
@@ -567,6 +622,29 @@ function applyScheduleFallback(parsed, userInput, settings) {
         // 偏差超过 2 小时，说明 AI 没听"现在"
         firstStep.time = currentTimeStr;
         firstStep.date = todayStr;
+        corrected++;
+      }
+    }
+
+    // 校验4：非例外任务且用户未表达时间意图时，不得早于「开始安排」时间
+    if (!isExceptionTask && !userHasTimeIntent && task.steps && task.steps.length > 0) {
+      const firstStep = task.steps[0];
+      const stepMin = toMinutes(firstStep.time);
+      if (stepMin !== null && stepMin < planStartMin) {
+        firstStep.time = planStart;
+        corrected++;
+      }
+    }
+
+    // 校验5：到达「准备休息」时间后不再安排工作类任务（生活类除外）→ 顺延到次日「开始安排」
+    // 守卫：仅当「准备休息」晚于「开始安排」时生效。若用户把准备休息设得早于开始安排
+    //（如跨零点作息：开始安排 09:00、准备休息 06:00），截止比较无意义，跳过以免全量误顺延。
+    if (!isExceptionTask && !isMealTask && !isSleepTask && !userHasTimeIntent && task.steps && task.steps.length > 0) {
+      const firstStep = task.steps[0];
+      const stepMin = toMinutes(firstStep.time);
+      if (planEndMin > planStartMin && stepMin !== null && stepMin >= planEndMin) {
+        firstStep.date = nextDate(firstStep.date);
+        firstStep.time = planStart;
         corrected++;
       }
     }
@@ -3764,8 +3842,8 @@ function openSettings() {
   // 不可抗力自动重排设置项当前已隐藏（HTML被注释），元素可能不存在，需防御避免报错中断弹窗打开
   const autoRescheduleEl = $('#settingsAutoReschedule');
   if (autoRescheduleEl) autoRescheduleEl.checked = s.autoReschedule;
-  $('#settingsWorkStart').value = s.workStart;
-  $('#settingsWorkEnd').value = s.workEnd;
+  $('#settingsWorkStart').value = s.workStart || '09:00';
+  $('#settingsWorkEnd').value = s.workEnd || '22:30';
   $('#settingsIntensity').value = s.remindIntensity;
   $('#settingsSound').checked = s.soundEnabled;
   $('#settingsVoice').checked = s.voiceEnabled;
@@ -3838,8 +3916,8 @@ function saveSettingsFromModal() {
   // 不可抗力自动重排设置项已隐藏：元素不存在时跳过赋值，保留 s（getSettings）中的原有值
   const autoRescheduleEl = $('#settingsAutoReschedule');
   if (autoRescheduleEl) s.autoReschedule = autoRescheduleEl.checked;
-  s.workStart = parseInt($('#settingsWorkStart').value) || 9;
-  s.workEnd = parseInt($('#settingsWorkEnd').value) || 18;
+  s.workStart = $('#settingsWorkStart').value || '09:00';
+  s.workEnd = $('#settingsWorkEnd').value || '22:30';
   s.remindIntensity = $('#settingsIntensity').value;
   s.soundEnabled = $('#settingsSound').checked;
   s.voiceEnabled = $('#settingsVoice').checked;
