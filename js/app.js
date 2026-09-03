@@ -1090,6 +1090,8 @@ function shiftAllSubsequentTasks(anchorTaskId, minutes, options = {}) {
   d.tasks.forEach(t => {
     // 跳过锚点任务本身、已完成任务、无安排时间的任务
     if (t.id === anchorTaskId || t.status !== 'pending' || !t.scheduledTime) return;
+    // 同一事件的兄弟步骤已由 shiftSiblingSteps（或事件整体修改逻辑）顺延过，此处必须跳过，否则会被二次顺延
+    if (anchorTask.parentTask && t.parentTask === anchorTask.parentTask) return;
 
     const taskTime = parseScheduledDateTime(t.scheduledDate, t.scheduledTime);
     if (!taskTime) return;
@@ -1472,12 +1474,18 @@ function findTimeConflicts(steps) {
 }
 
 /**
- * 显示时间冲突处理弹窗
+ * 冲突顺延后事件之间的缓冲时间（分钟）
+ */
+const CONFLICT_SHIFT_BUFFER_MIN = 10;
+
+/**
+ * 显示时间冲突处理弹窗（确定性顺延方案：旧任务只调时间不删除，ID 保留，记录不丢失）
  * @param {Array<Object>} conflicts - 冲突的任务列表
  * @param {Array<Object>} stepsToAdd - 要加入的步骤
  * @param {string} parentTaskName - 母任务名称
+ * @param {string} [source] - 调用来源（'done' 表示从已完成清单重新加入，处理后需刷新清单）
  */
-function showConflictResolution(conflicts, stepsToAdd, parentTaskName) {
+function showConflictResolution(conflicts, stepsToAdd, parentTaskName, source) {
   console.log('[showConflictResolution] 显示时间冲突处理弹窗，冲突数:', conflicts.length);
 
   let conflictHtml = '';
@@ -1499,15 +1507,18 @@ function showConflictResolution(conflicts, stepsToAdd, parentTaskName) {
     <h3 style="color:var(--accent2);margin-top:0;">时间有冲突哦～</h3>
     <p style="font-size:12.5px;margin-bottom:10px;">在以下时间已经安排了事项：</p>
     <div style="margin-bottom:14px;">${conflictHtml}</div>
-    <p style="font-size:12.5px;color:var(--muted);margin-bottom:8px;">这两件事你想如何安排呢？可以在下方输入框告诉我！</p>
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <input type="text" id="conflictChatInput" class="api-input" style="flex:1;" placeholder="比如：把新任务改到明天下午，或者把旧任务往后推...">
-      <button class="action-btn primary" id="conflictChatSendBtn" style="flex:0 0 auto;">帮我安排</button>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">两件事撞到一起了，你想先做哪件？我会自动帮你排好另一件的时间。</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button id="conflictOldFirstBtn" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border, rgba(0,0,0,0.12));border-radius:10px;cursor:pointer;text-align:left;">
+        <span style="font-size:13.5px;font-weight:600;">🕐 已有的安排优先</span>
+        <span style="font-size:12px;color:var(--muted);">新任务自动排到之后的空闲时段</span>
+      </button>
+      <button id="conflictNewFirstBtn" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border, rgba(0,0,0,0.12));border-radius:10px;cursor:pointer;text-align:left;">
+        <span style="font-size:13.5px;font-weight:600;">✨ 新任务优先</span>
+        <span style="font-size:12px;color:var(--muted);">已有任务及后续任务整体顺延（原任务保留，情绪对话等记录不丢失）</span>
+      </button>
     </div>
-    <div id="conflictChatLoading" style="display:none;text-align:center;padding:12px;color:var(--muted);font-size:12px;">
-      <span class="spinner" style="display:inline-block;width:12px;height:12px;border:2px solid var(--accent-soft);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px;"></span>
-      正在帮你重新安排...
-    </div>
+    <p style="font-size:11.5px;color:var(--muted);margin:12px 0 0;text-align:center;">点击空白处可取消，本次不保存</p>
   `;
 
   overlay.appendChild(modal);
@@ -1520,88 +1531,259 @@ function showConflictResolution(conflicts, stepsToAdd, parentTaskName) {
     }
   };
 
-  const handleResolution = async () => {
-    const userInput = $('#conflictChatInput').value.trim();
-    if (!userInput) return;
-
-    console.log('[showConflictResolution] 用户处理意见:', userInput);
-    $('#conflictChatInput').disabled = true;
-    $('#conflictChatSendBtn').disabled = true;
-    $('#conflictChatLoading').style.display = 'block';
-
-    try {
-      const settings = getSettings();
-      const stepsDesc = stepsToAdd.map((s, i) => `${i + 1}. ${s.text}${s.scheduledTime ? '（原时间' + s.scheduledTime + '）' : ''}${s.duration ? '（' + s.duration + '分钟）' : ''}`).join('\n');
-      const conflictsDesc = conflicts.map(c => {
-        const et = c.existingTask || c.newStep || {};
-        return `- ${et.text || ''}（${et.scheduledTime || '未定'}，${et.duration || 10}分钟）`;
-      }).join('\n');
-
-      const prompt = `用户想把以下任务重新加入待办清单：
-【要加入的任务】
-事件：${parentTaskName || '未分类'}
-步骤：
-${stepsDesc}
-
-【与以下待办任务有时间冲突】：
-${conflictsDesc}
-
-【用户的处理意见】："${userInput}"
-
-请根据用户意见重新安排所有涉及的任务（包括要加入的和冲突的），返回 JSON 格式：
-{
-  "tasks": [
-    {
-      "parentTask": "事件名",
-      "steps": [
-        { "text": "步骤内容", "duration": 分钟数, "time": "HH:MM 或 null" }
-      ]
-    }
-  ]
-}
-注意：要加入的新任务和冲突的旧任务都需要在返回结果中重新安排时间。只返回 JSON。`;
-
-      const result = await SF_API.callAI(
-        [{ role: 'user', content: prompt }],
-        '你是任务调度助手。只返回 JSON。'
-      );
-
-      let parsed;
-      try {
-        const cleaned = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-        parsed = JSON.parse(cleaned);
-      } catch (e) {
-        console.warn('[showConflictResolution] AI 返回解析失败:', result);
-        showToast('AI 返回格式有误，请重试', 'error');
-        $('#conflictChatInput').disabled = false;
-        $('#conflictChatSendBtn').disabled = false;
-        $('#conflictChatLoading').style.display = 'none';
-        return;
-      }
-
-      // 删除冲突的旧任务（同步保存，确保后续 saveBreakdownResult 读到已删除的数据）
-      const d = getData();
-      const conflictIds = conflicts.map(c => (c.existingTask && c.existingTask.id) || c.id).filter(Boolean);
-      d.tasks = d.tasks.filter(t => !conflictIds.includes(t.id));
-      saveDataSync(d);
-
-      // 保存 AI 重新安排的结果
-      saveBreakdownResult(parsed);
-
-      overlay.remove();
-      showToast('已帮你重新安排好啦～', 'success');
-
-    } catch (err) {
-      console.error('[showConflictResolution] 处理失败:', err);
-      showToast(err.message, 'error');
-      $('#conflictChatInput').disabled = false;
-      $('#conflictChatSendBtn').disabled = false;
-      $('#conflictChatLoading').style.display = 'none';
+  const oldFirstBtn = $('#conflictOldFirstBtn');
+  const newFirstBtn = $('#conflictNewFirstBtn');
+  const lockButtons = () => {
+    oldFirstBtn.disabled = true; newFirstBtn.disabled = true;
+    oldFirstBtn.style.opacity = '0.5'; newFirstBtn.style.opacity = '0.5';
+  };
+  const unlockButtons = () => {
+    oldFirstBtn.disabled = false; newFirstBtn.disabled = false;
+    oldFirstBtn.style.opacity = ''; newFirstBtn.style.opacity = '';
+  };
+  const refreshListIfOpen = () => {
+    if (source === 'done' && $('#listModal') && $('#listModal').classList.contains('show')) {
+      openListModal('done');
     }
   };
 
-  $('#conflictChatSendBtn').onclick = handleResolution;
-  $('#conflictChatInput').onkeydown = (e) => { if (e.key === 'Enter') handleResolution(); };
+  oldFirstBtn.onclick = () => {
+    lockButtons();
+    try {
+      resolveConflictOldFirst(conflicts, stepsToAdd, parentTaskName);
+      overlay.remove();
+      refreshListIfOpen();
+    } catch (err) {
+      console.error('[showConflictResolution] 已有安排优先处理失败:', err);
+      showToast('处理失败，请重试', 'error');
+      unlockButtons();
+    }
+  };
+
+  newFirstBtn.onclick = () => {
+    lockButtons();
+    try {
+      resolveConflictNewFirst(conflicts, stepsToAdd, parentTaskName);
+      overlay.remove();
+      refreshListIfOpen();
+    } catch (err) {
+      console.error('[showConflictResolution] 新任务优先处理失败:', err);
+      showToast('处理失败，请重试', 'error');
+      unlockButtons();
+    }
+  };
+}
+
+/**
+ * 将扁平步骤数组按事件分组还原为 saveBreakdownResult 可用的结构
+ * @param {Array<Object>} steps - 扁平步骤数组
+ * @param {string} [fallbackParentName] - 步骤缺少 parentTask 时使用的事件名
+ * @returns {Object} { tasks: [{ parentTask, steps: [{ text, duration, time, date, breakAfter }] }] }
+ */
+function buildParsedFromSteps(steps, fallbackParentName) {
+  const groups = new Map();
+  steps.forEach(s => {
+    const key = s.parentTask || fallbackParentName || '未分类';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  });
+  return {
+    tasks: Array.from(groups.entries()).map(([parentTask, arr]) => ({
+      parentTask,
+      steps: arr.map(s => ({
+        text: s.text,
+        duration: s.duration || 10,
+        time: s.scheduledTime || null,
+        date: s.scheduledDate || null,
+        breakAfter: s.breakAfter || false
+      }))
+    }))
+  };
+}
+
+/**
+ * 为一组步骤计算整体需要后推的毫秒数，使整组不与任何障碍时段重叠（保持组内原有间隔）
+ * @param {Array<{start:number,end:number}>} stepSpans - 组内各步骤的原始时间区间
+ * @param {Array<{start:number,end:number}>} obstacles - 障碍时段（已有任务/其他新事件）
+ * @returns {number} 需要后推的毫秒数（0 表示无需移动）
+ */
+function computeConflictFreeShift(stepSpans, obstacles) {
+  let deltaMs = 0;
+  for (let iter = 0; iter < 60; iter++) {
+    let pushMs = 0;
+    for (const span of stepSpans) {
+      const sStart = span.start + deltaMs;
+      const sEnd = span.end + deltaMs;
+      for (const ob of obstacles) {
+        if (sStart < ob.end && sEnd > ob.start) {
+          const need = ob.end + CONFLICT_SHIFT_BUFFER_MIN * 60000 - sStart;
+          if (need > pushMs) pushMs = need;
+        }
+      }
+    }
+    if (pushMs <= 0) break;
+    deltaMs += pushMs;
+  }
+  return deltaMs;
+}
+
+/**
+ * 冲突处理：已有安排优先 —— 旧任务时间完全不动，新任务整体后移到最早的空闲时段
+ * @param {Array<Object>} conflicts - 冲突列表
+ * @param {Array<Object>} stepsToAdd - 要加入的步骤
+ * @param {string} parentTaskName - 母任务名称
+ */
+function resolveConflictOldFirst(conflicts, stepsToAdd, parentTaskName) {
+  const data = getData();
+
+  // 已有任务占用的时段（作为新任务落位的障碍）
+  const pendingSpans = [];
+  data.tasks.forEach(t => {
+    if (t.status !== 'pending' || !t.scheduledTime) return;
+    const st = parseScheduledDateTime(t.scheduledDate, t.scheduledTime);
+    if (st) pendingSpans.push({ start: st.getTime(), end: st.getTime() + (t.duration || 10) * 60000 });
+  });
+
+  const conflictedRefs = new Set(conflicts.map(c => c.newStep));
+
+  // 新步骤按事件分组（保持插入顺序，逐组落位）
+  const groups = new Map();
+  stepsToAdd.forEach(s => {
+    const key = s.parentTask || parentTaskName || '未分类';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  });
+
+  let shiftedEvents = 0;
+  groups.forEach((steps, key) => {
+    // 无冲突的事件保持原时间不动
+    if (!steps.some(s => conflictedRefs.has(s))) return;
+
+    const spans = [];
+    steps.forEach(s => {
+      if (!s.scheduledTime) return;
+      const st = parseScheduledDateTime(s.scheduledDate, s.scheduledTime);
+      if (st) spans.push({ step: s, start: st.getTime(), end: st.getTime() + (s.duration || 10) * 60000 });
+    });
+    if (!spans.length) return;
+
+    // 障碍 = 已有任务 + 其他新事件当前占用的时段
+    const obstacles = pendingSpans.slice();
+    groups.forEach((arr, otherKey) => {
+      if (otherKey === key) return;
+      arr.forEach(s => {
+        if (!s.scheduledTime) return;
+        const st = parseScheduledDateTime(s.scheduledDate, s.scheduledTime);
+        if (st) obstacles.push({ start: st.getTime(), end: st.getTime() + (s.duration || 10) * 60000 });
+      });
+    });
+
+    const deltaMs = computeConflictFreeShift(spans, obstacles);
+    if (deltaMs > 0) {
+      const deltaMin = Math.round(deltaMs / 60000);
+      spans.forEach(({ step }) => {
+        const st = parseScheduledDateTime(step.scheduledDate, step.scheduledTime);
+        st.setMinutes(st.getMinutes() + deltaMin);
+        step.scheduledTime = formatTime(st);
+        step.scheduledDate = formatDate(st);
+      });
+      shiftedEvents++;
+      console.log('[resolveConflictOldFirst] 事件「' + key + '」整体后移', deltaMin, '分钟');
+    }
+  });
+
+  const count = saveBreakdownResult(buildParsedFromSteps(stepsToAdd, parentTaskName));
+  showToast(shiftedEvents > 0 ? `已把新任务排到之后的空闲时段，共 ${count} 个步骤` : `已保存 ${count} 个步骤`, 'success');
+}
+
+/**
+ * 冲突处理：新任务优先 —— 新任务按原时间保存，冲突的旧任务用清单改时间同款的确定性顺延后移
+ * 旧任务仅调整时间、ID 不变，情绪对话历史等记录完整保留
+ * @param {Array<Object>} conflicts - 冲突列表
+ * @param {Array<Object>} stepsToAdd - 要加入的步骤
+ * @param {string} parentTaskName - 母任务名称
+ */
+function resolveConflictNewFirst(conflicts, stepsToAdd, parentTaskName) {
+  const data = getData();
+
+  // 1. 汇总每个冲突旧任务需要让出的最晚时刻（与其冲突的新步骤中最晚的结束时间）
+  const byTask = new Map();
+  conflicts.forEach(c => {
+    if (!c.existingTask || c.existingTask.id == null || !c.newEnd) return;
+    const id = c.existingTask.id;
+    if (!byTask.has(id)) {
+      byTask.set(id, { origStart: c.existingStart ? c.existingStart.getTime() : 0, clearUntil: 0 });
+    }
+    const e = byTask.get(id);
+    if (c.newEnd.getTime() > e.clearUntil) e.clearUntil = c.newEnd.getTime();
+  });
+
+  // 2. 按原始开始时间从早到晚处理（早的任务先顺延，级联会自动带动后续任务）
+  const entries = Array.from(byTask.entries()).sort((a, b) => a[1].origStart - b[1].origStart);
+  let shifted = 0;
+  entries.forEach(([id, e]) => {
+    const task = data.tasks.find(t => t.id === id);
+    if (!task || task.status !== 'pending' || !task.scheduledTime) return;
+    const targetMs = e.clearUntil + CONFLICT_SHIFT_BUFFER_MIN * 60000;
+    const curStart = parseScheduledDateTime(task.scheduledDate, task.scheduledTime);
+    if (!curStart) return;
+    const deltaMin = Math.round((targetMs - curStart.getTime()) / 60000);
+    if (deltaMin <= 0) return; // 已被先前的级联顺延推到新任务之后
+    // 与清单内改时间完全同源：先顺延同事件后续步骤与后续任务（锚点=当前时间），再移动自身
+    shiftSiblingSteps(id, deltaMin, { data, save: false });
+    shiftAllSubsequentTasks(id, deltaMin, { useEndTime: true, data, save: false });
+    const newStart = new Date(curStart.getTime() + deltaMin * 60000);
+    task.scheduledTime = formatTime(newStart);
+    task.scheduledDate = formatDate(newStart);
+    task.reminded = false;
+    shifted++;
+    console.log('[resolveConflictNewFirst] 旧任务「' + task.text + '」顺延到', newStart.getHours() + ':' + String(newStart.getMinutes()).padStart(2, '0'));
+  });
+
+  // 3. 兜底：级联顺延可能把其他旧任务推到新任务占用的时间上，发现则继续后推
+  const newSpans = [];
+  stepsToAdd.forEach(s => {
+    if (!s.scheduledTime) return;
+    const st = parseScheduledDateTime(s.scheduledDate, s.scheduledTime);
+    if (st) newSpans.push({ start: st.getTime(), end: st.getTime() + (s.duration || 10) * 60000 });
+  });
+  if (newSpans.length) {
+    for (let round = 0; round < 20; round++) {
+      let moved = false;
+      for (const t of data.tasks) {
+        if (t.status !== 'pending' || !t.scheduledTime) continue;
+        const st = parseScheduledDateTime(t.scheduledDate, t.scheduledTime);
+        if (!st) continue;
+        const stMs = st.getTime();
+        const enMs = stMs + (t.duration || 10) * 60000;
+        let pushMs = 0;
+        for (const ns of newSpans) {
+          if (stMs < ns.end && enMs > ns.start) {
+            const need = ns.end + CONFLICT_SHIFT_BUFFER_MIN * 60000 - stMs;
+            if (need > pushMs) pushMs = need;
+          }
+        }
+        if (pushMs > 0) {
+          const deltaMin = Math.round(pushMs / 60000);
+          shiftSiblingSteps(t.id, deltaMin, { data, save: false });
+          shiftAllSubsequentTasks(t.id, deltaMin, { useEndTime: true, data, save: false });
+          const nt = new Date(stMs + pushMs);
+          t.scheduledTime = formatTime(nt);
+          t.scheduledDate = formatDate(nt);
+          t.reminded = false;
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+  }
+
+  saveDataSync(data);
+  scheduleReminders();
+
+  // 4. 新任务按原时间保存（此时旧任务已让位，不会再触发冲突）
+  const count = saveBreakdownResult(buildParsedFromSteps(stepsToAdd, parentTaskName));
+  showToast(`新任务已优先安排，${shifted > 0 ? `${shifted} 个已有任务已自动顺延，` : ''}共 ${count} 个新步骤`, 'success');
 }
 
 /**
@@ -1616,7 +1798,7 @@ function reAddStepsToPending(steps, parentTaskName, source) {
 
   if (conflicts.length > 0) {
     // 有冲突：弹窗让用户处理
-    showConflictResolution(conflicts, steps, parentTaskName);
+    showConflictResolution(conflicts, steps, parentTaskName, source);
   } else {
     // 无冲突：直接加入
     const d = getData();
