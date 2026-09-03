@@ -13,6 +13,23 @@ let bedtimeState = {
   entryCount: 0  // 今日已进入次数
 };
 
+// ===== 今日完成任务判断 =====
+
+/**
+ * 判断任务是否在今天（本地日历日）完成
+ * completedAt 是 UTC ISO 字符串，不能直接用 startsWith(本地日期) 比较——
+ * 时区偏移会使本地凌晨完成的任务 UTC 日期仍为前一天
+ * @param {Object} t - 任务对象
+ * @param {string} today - 本地今日 YYYY-MM-DD
+ * @returns {boolean}
+ */
+function isCompletedToday(t, today) {
+  if (!t || t.status !== 'done' || !t.completedAt) return false;
+  const d = new Date(t.completedAt);
+  if (isNaN(d.getTime())) return false;
+  return formatDate(d) === today;
+}
+
 // ===== 手写日记AI回应 =====
 
 /**
@@ -30,7 +47,7 @@ async function generateDiaryResponse(diaryEntry) {
   const data = getData();
   const today = todayDateStr();
   const todayTasks = data.tasks
-    .filter(t => t.status === 'done' && t.completedAt && t.completedAt.startsWith(today))
+    .filter(t => isCompletedToday(t, today))
     .map(t => t.text);
   
   const prompt = SF_PROMPT.buildDiaryResponsePrompt(
@@ -86,16 +103,44 @@ async function saveDiaryWithResponse(content, mood, editId) {
     data.diary.push(entry);
   }
   
-  saveData(data);
+  // 同步落盘：后续 renderDiaryList 会立即从 localStorage 重新读取，
+  // 节流版 saveData 的 200ms 延迟会导致新条目/AI回应读取不到（与批量操作 bug 同根因）
+  saveDataSync(data);
 
   // 异步生成AI回应（显示吉祥物加载指示）
   generateDiaryResponse(entry).then(response => {
+    // 重新读取最新数据后再写回，避免闭包中的旧 data 覆盖期间其他模块的修改
+    const fresh = getData();
+    const freshEntry = (fresh.diary || []).find(d => d.id === entry.id);
+    if (!freshEntry) return; // 生成期间条目被删除，放弃本次回应
+
     if (response) {
-      entry.aiResponse = response;
-      entry.respondedAt = new Date().toISOString();
-      saveData(data);
-      // 触发UI更新
-      if (document.getElementById('diaryModal').classList.contains('show')) {
+      freshEntry.aiResponse = response;
+      freshEntry.respondedAt = new Date().toISOString();
+    } else if (getSettings().diaryAIResponse !== false) {
+      // AI 调用失败：写入兜底文案，避免一直停留在"正在回应你..."加载态
+      freshEntry.aiResponse = '（这次没等到回应，不过你的日记已经被好好收下了～）';
+      freshEntry.respondedAt = new Date().toISOString();
+    } else {
+      // 用户已关闭日记AI回应：仅结束加载态，不写回应
+      freshEntry.respondedAt = new Date().toISOString();
+    }
+
+    saveDataSync(fresh);
+    // 触发UI更新
+    if (document.getElementById('diaryModal')?.classList.contains('show')) {
+      renderDiaryList();
+    }
+  }).catch(err => {
+    // 兜底：生成过程本身异常（如 prompt 构建失败），同样结束加载态避免卡死
+    console.error('[saveDiaryWithResponse] 生成AI回应异常:', err);
+    const fresh = getData();
+    const freshEntry = (fresh.diary || []).find(d => d.id === entry.id);
+    if (freshEntry) {
+      freshEntry.aiResponse = '（这次没等到回应，不过你的日记已经被好好收下了～）';
+      freshEntry.respondedAt = new Date().toISOString();
+      saveDataSync(fresh);
+      if (document.getElementById('diaryModal')?.classList.contains('show')) {
         renderDiaryList();
       }
     }
@@ -111,10 +156,17 @@ async function saveDiaryWithResponse(content, mood, editId) {
 
 // ===== 睡前安心仪式 =====
 
+// 步骤切换的异步渲染序号：退出/重启/重新进入步骤时递增，
+// 用于丢弃在途 AI 请求返回后的过期渲染，避免状态错乱
+let _bedtimeTransitionSeq = 0;
+// 小确幸"换一批"是否正在刷新（防重复请求）
+let _gratitudeRefreshing = false;
+
 /**
  * 退出睡前安心仪式
  */
 function exitBedtimeRitual() {
+  _bedtimeTransitionSeq++; // 使在途的异步渲染失效
   if (window._bedtimeOverlay) {
     window._bedtimeOverlay.remove();
     window._bedtimeOverlay = null;
@@ -125,6 +177,7 @@ function exitBedtimeRitual() {
  * 启动睡前安心仪式
  */
 function startBedtimeRitual() {
+  _bedtimeTransitionSeq++; // 使上一轮仪式在途的异步渲染失效
   // 检查今日已进入次数
   const today = todayDateStr();
   const data = getData();
@@ -172,11 +225,7 @@ function showBedtimeStep(step) {
 function showBedtimeReview() {
   const data = getData();
   const today = todayDateStr();
-  const todayDone = data.tasks.filter(t => 
-    t.status === 'done' && 
-    t.completedAt && 
-    t.completedAt.startsWith(today)
-  );
+  const todayDone = data.tasks.filter(t => isCompletedToday(t, today));
   
   bedtimeState.review = todayDone.map(t => ({
     text: t.text,
@@ -246,7 +295,10 @@ function skipBedtimeReview() {
  * @param {number} step - 下一步编号
  */
 function proceedBedtimeStep(step) {
-  if (window._bedtimeOverlay) {
+  if (step === 1 && window._bedtimeOverlay) {
+    // 进入第二步需异步生成选项：窗口保持可见，内容区切换为吉祥物加载态，避免视觉断层
+    showBedtimeLoadingState('正在为你准备小确幸...');
+  } else if (window._bedtimeOverlay) {
     window._bedtimeOverlay.remove();
     window._bedtimeOverlay = null;
   }
@@ -254,15 +306,67 @@ function proceedBedtimeStep(step) {
 }
 
 /**
+ * 将当前睡前仪式窗口的内容区切换为吉祥物加载态（窗口始终保持可见）
+ * 复用任务拆解的吉祥物加载组件 getMascotLoadingHTML，保持视觉一致
+ * @param {string} text - 加载提示文字
+ */
+function showBedtimeLoadingState(text) {
+  const overlay = window._bedtimeOverlay;
+  if (!overlay) return;
+  const modal = overlay.querySelector('.bedtime-modal');
+  if (!modal) return;
+  // 清除第一步"点击任意位置继续"的处理器，避免加载期间重复触发进入
+  modal.onclick = null;
+  modal.innerHTML = `
+    <button class="bedtime-close-btn" onclick="exitBedtimeRitual()" title="退出仪式">×</button>
+    <h3 style="color:#c9a87c;margin-bottom:16px;">🌙 睡前安心仪式</h3>
+    <div style="font-size:12px;color:#8a7f75;margin-bottom:12px;">第 2 步 · 三个小确幸</div>
+    <div style="display:flex;align-items:center;justify-content:center;min-height:220px;">
+      ${getMascotLoadingHTML(text || '正在为你准备小确幸...')}
+    </div>
+  `;
+}
+
+/**
  * 第二步：三个小确幸（选择题）
+ * 异步生成选项期间，窗口由 proceedBedtimeStep 置为加载态并保持可见；
+ * 返回后经令牌校验再复用该窗口渲染内容，实现平滑替换
  */
 async function showBedtimeGratitude() {
-  // 生成5个选择题选项
-  const gratitudeOptions = await generateGratitudeOptions();
-  
-  const overlay = createEl('div', 'modal-overlay bedtime-overlay');
-  overlay.style.cssText = 'display:flex;z-index:9998;';
-  
+  // 序号令牌：若加载期间用户退出/重新进入仪式，则丢弃本次渲染结果
+  const seq = ++_bedtimeTransitionSeq;
+  let gratitudeOptions;
+  try {
+    gratitudeOptions = await generateGratitudeOptions();
+  } catch (e) {
+    console.error('[showBedtimeGratitude] 生成小确幸选项失败，使用兜底选项:', e);
+    gratitudeOptions = [
+      '今天按时吃了饭',
+      '喝了一杯好喝的东西',
+      '看到了一朵好看的花',
+      '和人聊了几句天',
+      '安静地待了一会儿'
+    ];
+  }
+  if (seq !== _bedtimeTransitionSeq || !window._bedtimeOverlay) return;
+  renderBedtimeGratitude(gratitudeOptions);
+}
+
+/**
+ * 渲染第二步界面
+ * 优先复用当前窗口（加载态 → 内容平滑替换，新 .modal 自动播放 modalIn 入场动画）；
+ * 无窗口时新建（兼容直接调用场景，行为与旧版一致）
+ * @param {string[]} gratitudeOptions - 小确幸选项
+ */
+function renderBedtimeGratitude(gratitudeOptions) {
+  let overlay = window._bedtimeOverlay;
+  if (!overlay) {
+    overlay = createEl('div', 'modal-overlay bedtime-overlay');
+    overlay.style.cssText = 'display:flex;z-index:9998;';
+    document.body.appendChild(overlay);
+    overlay.classList.add('show');
+  }
+
   let optionsHtml = gratitudeOptions.map((opt, i) => `
     <button class="gratitude-option" data-index="${i}" onclick="toggleGratitudeOption(this, ${i})" style="
       width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
@@ -270,38 +374,32 @@ async function showBedtimeGratitude() {
       cursor:pointer;transition:all 0.2s;color:#d4c4b0;
     ">${escapeHtml(opt)}</button>
   `).join('');
-  
+
   overlay.innerHTML = `
     <div class="modal bedtime-modal" style="background:linear-gradient(180deg,#1a1520 0%,#0d0a12 100%);color:#f0e6d8;max-width:400px;position:relative;">
       <button class="bedtime-close-btn" onclick="exitBedtimeRitual()" title="退出仪式">×</button>
       <h3 style="color:#c9a87c;margin-bottom:16px;">🌙 睡前安心仪式</h3>
       <div style="font-size:12px;color:#8a7f75;margin-bottom:12px;">第 2 步 · 三个小确幸</div>
-      
+
       <p style="font-size:14px;margin-bottom:16px;color:#d4c4b0;">
         今天有哪些小小的美好？选几个吧~
       </p>
-      
+
       <div id="gratitudeOptions" style="max-height:45vh;overflow-y:auto;margin-bottom:16px;">
         ${optionsHtml}
       </div>
-      
+
       <div id="selectedGratitudes" style="margin-bottom:12px;font-size:12px;color:#8a7f75;"></div>
-      
+
       <div style="display:flex;gap:8px;">
-        <button class="action-btn secondary" onclick="refreshGratitudeOptions()" style="flex:1;background:transparent;border:1px solid #6a5f55;color:#8a7f75;">换一批</button>
+        <button class="action-btn secondary" id="refreshGratitudeBtn" onclick="refreshGratitudeOptions()" style="flex:1;background:transparent;border:1px solid #6a5f55;color:#8a7f75;">换一批</button>
         <button class="action-btn primary" id="confirmGratitudeBtn" onclick="confirmGratitudeSelection()" style="flex:1;background:linear-gradient(135deg,#c9a87c,#8b6f5e);" disabled>选好啦~</button>
       </div>
-      
+
       <p style="font-size:11px;color:#6a5f55;text-align:center;margin-top:16px;">点击屏幕任意位置继续</p>
     </div>
   `;
-  
-  document.body.appendChild(overlay);
-  overlay.classList.add('show');
-  overlay.querySelector('.bedtime-modal').onclick = (e) => {
-    if (e.target.tagName !== 'BUTTON') {} // 不自动继续，需要选择
-  };
-  
+
   window._bedtimeOverlay = overlay;
   window._gratitudeOptions = gratitudeOptions;
 }
@@ -313,9 +411,7 @@ async function showBedtimeGratitude() {
 async function generateGratitudeOptions() {
   const data = getData();
   const today = todayDateStr();
-  const todayDone = data.tasks.filter(t => 
-    t.status === 'done' && t.completedAt && t.completedAt.startsWith(today)
-  );
+  const todayDone = data.tasks.filter(t => isCompletedToday(t, today));
   
   const prompt = SF_PROMPT.buildGratitudeOptionsPrompt(todayDone.map(t => t.text));
   
@@ -377,27 +473,36 @@ function toggleGratitudeOption(btn, index) {
  * 刷新小确幸选项
  */
 async function refreshGratitudeOptions() {
-  const newOptions = await generateGratitudeOptions();
-  window._gratitudeOptions = newOptions;
-  
-  const container = document.getElementById('gratitudeOptions');
-  if (!container) return;
-  
-  container.innerHTML = newOptions.map((opt, i) => `
-    <button class="gratitude-option" data-index="${i}" onclick="toggleGratitudeOption(this, ${i})" style="
-      width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
-      border-radius:10px;font-size:13px;text-align:left;margin-bottom:8px;
-      cursor:pointer;transition:all 0.2s;color:#d4c4b0;
-    ">${escapeHtml(opt)}</button>
-  `).join('');
-  
-  // 恢复已选状态
-  container.querySelectorAll('.gratitude-option').forEach((btn, i) => {
-    if (bedtimeState.gratitudes.includes(newOptions[i])) {
-      btn.style.background = 'rgba(201,168,124,0.15)';
-      btn.style.borderColor = '#c9a87c';
-    }
-  });
+  if (_gratitudeRefreshing) return; // 防止连续点击造成重复请求
+  _gratitudeRefreshing = true;
+  const btn = document.getElementById('refreshGratitudeBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  try {
+    const newOptions = await generateGratitudeOptions();
+    window._gratitudeOptions = newOptions;
+
+    const container = document.getElementById('gratitudeOptions');
+    if (!container) return;
+
+    container.innerHTML = newOptions.map((opt, i) => `
+      <button class="gratitude-option" data-index="${i}" onclick="toggleGratitudeOption(this, ${i})" style="
+        width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+        border-radius:10px;font-size:13px;text-align:left;margin-bottom:8px;
+        cursor:pointer;transition:all 0.2s;color:#d4c4b0;
+      ">${escapeHtml(opt)}</button>
+    `).join('');
+
+    // 恢复已选状态
+    container.querySelectorAll('.gratitude-option').forEach((b, i) => {
+      if (bedtimeState.gratitudes.includes(newOptions[i])) {
+        b.style.background = 'rgba(201,168,124,0.15)';
+        b.style.borderColor = '#c9a87c';
+      }
+    });
+  } finally {
+    _gratitudeRefreshing = false;
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
 }
 
 /**

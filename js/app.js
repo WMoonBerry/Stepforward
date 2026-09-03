@@ -1071,11 +1071,16 @@ function shiftAllSubsequentTasks(anchorTaskId, minutes, options = {}) {
     return { shiftedCount: 0, eventCount: 0 };
   }
 
-  // 计算锚点时间（结束时间或开始时间）
-  let anchorTime = parseScheduledDateTime(anchorTask.scheduledDate, anchorTask.scheduledTime);
-  if (!anchorTime) return { shiftedCount: 0, eventCount: 0 };
-  if (useEndTime) {
-    anchorTime = new Date(anchorTime.getTime() + anchorTask.duration * 60000);
+  // 锚点时间：优先使用外部传入的原始时间，否则从任务当前时间计算
+  let anchorTime;
+  if (options.anchorTime instanceof Date) {
+    anchorTime = options.anchorTime;
+  } else {
+    anchorTime = parseScheduledDateTime(anchorTask.scheduledDate, anchorTask.scheduledTime);
+    if (!anchorTime) return { shiftedCount: 0, eventCount: 0 };
+    if (useEndTime) {
+      anchorTime = new Date(anchorTime.getTime() + anchorTask.duration * 60000);
+    }
   }
   const anchorTimeMs = anchorTime.getTime();
 
@@ -1196,7 +1201,7 @@ function openTaskMenu(taskId, source) {
       </div>
     </div>
 
-    <div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+    <div style="margin-bottom:16px;display:none;align-items:center;gap:8px;">
       <input type="checkbox" id="editShiftSubsequent" style="width:16px;height:16px;accent-color:var(--accent2);" checked>
       <label for="editShiftSubsequent" style="font-size:12px;color:var(--muted);cursor:pointer;">同步调整后续所有任务的时间</label>
     </div>
@@ -1251,13 +1256,7 @@ function openTaskMenu(taskId, source) {
     const d = getData();
     const t = d.tasks.find(x => x.id === taskId);
     if (t) {
-      t.text = newText;
-      t.duration = newDuration;
-      t.scheduledTime = newTime;
-      t.reminded = false;
-      console.log('[openTaskMenu] 任务已更新');
-
-      // 如果时间或时长有变化
+      // 先执行顺延（此时任务时间仍为旧值，作为正确的比较锚点）
       let siblingShifted = 0;
       let crossEventResult = { shiftedCount: 0, eventCount: 0 };
 
@@ -1271,6 +1270,13 @@ function openTaskMenu(taskId, source) {
           crossEventResult = shiftAllSubsequentTasks(taskId, totalShiftMinutes, { useEndTime: true, data: d, save: false });
         }
       }
+
+      // 再更新当前任务自身
+      t.text = newText;
+      t.duration = newDuration;
+      t.scheduledTime = newTime;
+      t.reminded = false;
+      console.log('[openTaskMenu] 任务已更新');
 
       // 统一同步保存所有修改
       saveDataSync(d);
@@ -1736,7 +1742,7 @@ function openParentTaskMenu(parentName, source) {
       </div>
     </div>
 
-    <div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+    <div style="margin-bottom:16px;display:none;align-items:center;gap:8px;">
       <input type="checkbox" id="shiftSubsequentTasks" style="width:16px;height:16px;accent-color:var(--accent2);" checked>
       <label for="shiftSubsequentTasks" style="font-size:12px;color:var(--muted);cursor:pointer;">同步调整后续所有任务的时间</label>
     </div>
@@ -1819,7 +1825,32 @@ function openParentTaskMenu(parentName, source) {
       let modifiedCount = 0;
       let lastModifiedStepId = null;
 
-      // 先修改本事件内的所有待办步骤
+      // 先计算本事件内最晚待办步骤的原始结束时间（用于跨事件联动的锚点）
+      // 必须在修改步骤前计算，否则锚点会变成新时间导致联动失效
+      let crossEventAnchorTime = null;
+      if (shiftSubsequent && (dayDiff !== 0 || timeShiftMinutes !== 0)) {
+        let latestEnd = 0;
+        let latestStepId = null;
+        stepIds.forEach(sid => {
+          const t = d.tasks.find(x => x.id === sid);
+          if (t && t.status === 'pending' && t.scheduledTime) {
+            const tStart = parseScheduledDateTime(t.scheduledDate, t.scheduledTime);
+            if (tStart) {
+              const tEnd = tStart.getTime() + (t.duration || 0) * 60000;
+              if (tEnd > latestEnd) {
+                latestEnd = tEnd;
+                latestStepId = t.id;
+              }
+            }
+          }
+        });
+        if (latestStepId) {
+          crossEventAnchorTime = new Date(latestEnd);
+          lastModifiedStepId = latestStepId; // 预先确定锚点步骤ID
+        }
+      }
+
+      // 修改本事件内的所有待办步骤
       stepIds.forEach(sid => {
         const t = d.tasks.find(x => x.id === sid);
         if (t && t.status === 'pending' && t.scheduledTime) {
@@ -1844,11 +1875,11 @@ function openParentTaskMenu(parentName, source) {
 
       console.log('[openParentTaskMenu] 本事件修改完成，修改了', modifiedCount, '个步骤');
 
-      // 跨事件联动：顺延后续所有任务（传入同一 data 对象，不单独保存）
+      // 跨事件联动：顺延后续所有任务（传入原始锚点时间，避免步骤已修改导致锚点偏移）
       let crossEventResult = { shiftedCount: 0, eventCount: 0 };
-      if (shiftSubsequent && lastModifiedStepId && (dayDiff !== 0 || timeShiftMinutes !== 0)) {
+      if (shiftSubsequent && lastModifiedStepId && crossEventAnchorTime && (dayDiff !== 0 || timeShiftMinutes !== 0)) {
         const totalShift = dayDiff * 24 * 60 + timeShiftMinutes;
-        crossEventResult = shiftAllSubsequentTasks(lastModifiedStepId, totalShift, { useEndTime: true, data: d, save: false });
+        crossEventResult = shiftAllSubsequentTasks(lastModifiedStepId, totalShift, { useEndTime: true, data: d, save: false, anchorTime: crossEventAnchorTime });
       }
 
       // 统一同步保存所有修改
@@ -3063,19 +3094,20 @@ function doReschedule(minutes) {
   const settings = getSettings();
   const task = data.tasks.find(t => t.id === currentWaitTaskId);
 
+  // 先顺延同事件的后续步骤（此时任务时间仍为旧值，作为正确的比较锚点）
+  let shiftedCount = 0;
+  if (task) {
+    shiftedCount = shiftSiblingSteps(currentWaitTaskId, minutes, { data: data, save: false });
+    console.log('[doReschedule] 同事件后续步骤顺延数:', shiftedCount);
+  }
+
+  // 再更新当前任务自身
   if (task && task.scheduledTime) {
     const t = parseTimeStr(task.scheduledTime);
     if (t) { t.setMinutes(t.getMinutes() + minutes); task.scheduledTime = formatTime(t); task.reminded = false; }
     console.log('[doReschedule] 当前任务新时间:', task.scheduledTime);
   } else if (task) {
     console.log('[doReschedule] 当前任务无安排时间，不顺延自身');
-  }
-
-  // 顺延同事件的后续步骤（传入同一 data 对象，不单独保存）
-  let shiftedCount = 0;
-  if (task) {
-    shiftedCount = shiftSiblingSteps(currentWaitTaskId, minutes, { data: data, save: false });
-    console.log('[doReschedule] 同事件后续步骤顺延数:', shiftedCount);
   }
 
   // 统一同步保存所有修改
@@ -3547,16 +3579,23 @@ function openSettings() {
   console.log('[openSettings] 打开设置弹窗');
   const s = getSettings();
   $('#settingsUserName').value = s.userName || '';
-  $('#settingsAutoReschedule').checked = s.autoReschedule;
+  // 不可抗力自动重排设置项当前已隐藏（HTML被注释），元素可能不存在，需防御避免报错中断弹窗打开
+  const autoRescheduleEl = $('#settingsAutoReschedule');
+  if (autoRescheduleEl) autoRescheduleEl.checked = s.autoReschedule;
   $('#settingsWorkStart').value = s.workStart;
   $('#settingsWorkEnd').value = s.workEnd;
   $('#settingsIntensity').value = s.remindIntensity;
   $('#settingsSound').checked = s.soundEnabled;
   $('#settingsVoice').checked = s.voiceEnabled;
-  $('#settingsPersonaAge').value = s.personaAge || '';
-  $('#settingsPersonaGender').value = s.personaGender || '';
-  $('#settingsPersonaStyle').value = s.personaStyle || '';
-  $('#settingsPersonaRelation').value = s.personaRelation || '';
+  // AI陪伴者气质栏当前已隐藏（HTML被注释），元素可能不存在，需防御避免报错中断弹窗打开
+  const personaAgeEl = $('#settingsPersonaAge');
+  if (personaAgeEl) personaAgeEl.value = s.personaAge || '';
+  const personaGenderEl = $('#settingsPersonaGender');
+  if (personaGenderEl) personaGenderEl.value = s.personaGender || '';
+  const personaStyleEl = $('#settingsPersonaStyle');
+  if (personaStyleEl) personaStyleEl.value = s.personaStyle || '';
+  const personaRelationEl = $('#settingsPersonaRelation');
+  if (personaRelationEl) personaRelationEl.value = s.personaRelation || '';
   $('#settingsLunchStart').value = s.lunchStart || '12:00';
   $('#settingsLunchDuration').value = s.lunchDuration ?? 90;
   $('#settingsDinnerStart').value = s.dinnerStart || '18:00';
@@ -3614,16 +3653,23 @@ function saveSettingsFromModal() {
   console.log('[saveSettingsFromModal] 保存设置');
   const s = getSettings();
   s.userName = $('#settingsUserName').value.trim();
-  s.autoReschedule = $('#settingsAutoReschedule').checked;
+  // 不可抗力自动重排设置项已隐藏：元素不存在时跳过赋值，保留 s（getSettings）中的原有值
+  const autoRescheduleEl = $('#settingsAutoReschedule');
+  if (autoRescheduleEl) s.autoReschedule = autoRescheduleEl.checked;
   s.workStart = parseInt($('#settingsWorkStart').value) || 9;
   s.workEnd = parseInt($('#settingsWorkEnd').value) || 18;
   s.remindIntensity = $('#settingsIntensity').value;
   s.soundEnabled = $('#settingsSound').checked;
   s.voiceEnabled = $('#settingsVoice').checked;
-  s.personaAge = $('#settingsPersonaAge').value.trim();
-  s.personaGender = $('#settingsPersonaGender').value.trim();
-  s.personaStyle = $('#settingsPersonaStyle').value.trim();
-  s.personaRelation = $('#settingsPersonaRelation').value.trim();
+  // AI陪伴者气质栏已隐藏：元素不存在时跳过赋值，保留 s（getSettings）中的原有值
+  const personaAgeEl = $('#settingsPersonaAge');
+  if (personaAgeEl) s.personaAge = personaAgeEl.value.trim();
+  const personaGenderEl = $('#settingsPersonaGender');
+  if (personaGenderEl) s.personaGender = personaGenderEl.value.trim();
+  const personaStyleEl = $('#settingsPersonaStyle');
+  if (personaStyleEl) s.personaStyle = personaStyleEl.value.trim();
+  const personaRelationEl = $('#settingsPersonaRelation');
+  if (personaRelationEl) s.personaRelation = personaRelationEl.value.trim();
   s.lunchStart = $('#settingsLunchStart').value || '12:00';
   s.lunchDuration = parseInt($('#settingsLunchDuration').value) || 0;
   s.dinnerStart = $('#settingsDinnerStart').value || '18:00';
@@ -3644,6 +3690,7 @@ function saveSettingsFromModal() {
   const themeModePicker = $('#themeModePicker');
   if (themeModePicker) s.themeMode = getSelectedThemeMode(themeModePicker);
   saveSettings(s);
+  updateUserGreeting(); // 称呼变更后即时同步主界面问候语，无需手动刷新
   showToast('设置已保存', 'success');
   closeSettings();
 }
@@ -4219,8 +4266,9 @@ function showApp() {
   const s = getSettings();
   if (s.userName) {
     const greeting = createEl('div');
+    greeting.id = 'userGreeting';
     greeting.style.cssText = 'padding:12px 16px;background:var(--warm-bg);border-radius:10px;margin-bottom:16px;font-size:13px;';
-    greeting.innerHTML = `👋 <strong>${s.userName}</strong>，今天想做点什么？不管多大的事，我们都可以拆成小步骤慢慢来。`;
+    greeting.innerHTML = `👋 <strong>${escapeHtml(s.userName)}</strong>，今天想做点什么？不管多大的事，我们都可以拆成小步骤慢慢来。`;
     $('#appPage .app-body').insertBefore(greeting, $('#appPage .section-title'));
   }
 
@@ -4235,6 +4283,32 @@ function showApp() {
   // 初始化用户引导系统
   if (typeof initOnboarding === 'function') {
     initOnboarding();
+  }
+}
+
+/**
+ * 设置保存后即时同步主界面的称呼问候语
+ * 有称呼：更新或创建问候条；清空称呼：移除问候条
+ */
+function updateUserGreeting() {
+  const s = getSettings();
+  const existing = document.getElementById('userGreeting');
+  if (s.userName) {
+    const html = `👋 <strong>${escapeHtml(s.userName)}</strong>，今天想做点什么？不管多大的事，我们都可以拆成小步骤慢慢来。`;
+    if (existing) {
+      existing.innerHTML = html;
+    } else {
+      const appPage = $('#appPage');
+      const anchor = $('#appPage .section-title');
+      if (!appPage || !anchor || appPage.style.display === 'none') return; // 主界面未显示时无需创建
+      const greeting = createEl('div');
+      greeting.id = 'userGreeting';
+      greeting.style.cssText = 'padding:12px 16px;background:var(--warm-bg);border-radius:10px;margin-bottom:16px;font-size:13px;';
+      greeting.innerHTML = html;
+      $('#appPage .app-body').insertBefore(greeting, anchor);
+    }
+  } else if (existing) {
+    existing.remove();
   }
 }
 
@@ -4622,6 +4696,27 @@ function renderDiaryList() {
       const meta = DIARY_TYPE_META[d.type] || DIARY_TYPE_META.manual;
       const timeStr = d.timestamp ? formatTime(new Date(d.timestamp)) : '';
       const moodTag = d.moodTag ? `<span style="font-size:11px;color:var(--muted);margin-left:6px;">${d.moodTag}</span>` : '';
+
+      // 晚安记录无 text 字段（存的是 review/gratitudes/goodnightMessage），单独汇总展示
+      let contentHtml;
+      let responseHtml;
+      if (d.type === 'bedtime') {
+        const reviewCount = (d.review || []).length;
+        const gratitudeCount = (d.gratitudes || []).length;
+        const bits = [];
+        if (reviewCount > 0) bits.push(`回顾了 ${reviewCount} 件事`);
+        if (gratitudeCount > 0) bits.push(`记下了 ${gratitudeCount} 个小确幸`);
+        contentHtml = `<div class="diary-item-content" style="color:var(--muted);">${bits.length ? bits.join(' · ') : '完成了一次睡前安心仪式'}</div>`;
+        responseHtml = d.goodnightMessage
+          ? `<button class="diary-praise-toggle" data-id="${d.id}" data-label="晚安" style="font-size:11px;color:var(--accent2);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;margin-top:4px;">📖 查看晚安</button><div class="diary-praise-content" data-id="${d.id}" style="display:none;margin-top:6px;"><div class="diary-ai-response"><span class="diary-ai-icon">🌙</span><span class="diary-ai-text">${md(d.goodnightMessage)}</span></div></div>`
+          : '';
+      } else {
+        contentHtml = `<div class="diary-item-content">${md(d.text || d.content || '')}</div>`;
+        responseHtml = d.type === 'achievement' && d.aiResponse
+          ? `<button class="diary-praise-toggle" data-id="${d.id}" data-label="夸夸" style="font-size:11px;color:var(--accent2);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;margin-top:4px;">📖 查看夸夸</button><div class="diary-praise-content" data-id="${d.id}" style="display:none;margin-top:6px;"><div class="diary-ai-response"><span class="diary-ai-icon">🌟</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div></div>`
+          : (d.aiResponse ? `<div class="diary-ai-response"><span class="diary-ai-icon">🌱</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div>` : (d.respondedAt === null && d.timestamp && (Date.now() - new Date(d.timestamp).getTime() < 60000) ? `<div class="diary-ai-response"><div style="display:flex;align-items:center;gap:6px;">${getMascotSmallHTML('正在回应你...')}</div></div>` : ''));
+      }
+
       html += `<div class="diary-item" data-id="${d.id}" data-type="${d.type}" style="margin-bottom:8px;">
         <div class="diary-item-head">
           <span class="diary-type-badge ${meta.cls}">${meta.icon} ${meta.label}</span>
@@ -4630,10 +4725,8 @@ function renderDiaryList() {
           <span style="flex:1;"></span>
           ${d.type === 'manual' ? `<button class="diary-edit" data-id="${d.id}" title="编辑" style="border:none;background:none;cursor:pointer;color:var(--muted);font-size:13px;">✏️</button>` : ''}
         </div>
-        <div class="diary-item-content">${md(d.text || d.content || '')}</div>
-        ${d.type === 'achievement' && d.aiResponse
-          ? `<button class="diary-praise-toggle" data-id="${d.id}" style="font-size:11px;color:var(--accent2);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;margin-top:4px;">📖 查看夸夸</button><div class="diary-praise-content" data-id="${d.id}" style="display:none;margin-top:6px;"><div class="diary-ai-response"><span class="diary-ai-icon">🌟</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div></div>`
-          : (d.aiResponse ? `<div class="diary-ai-response"><span class="diary-ai-icon">🌱</span><span class="diary-ai-text">${md(d.aiResponse)}</span></div>` : (d.respondedAt === null && d.timestamp && (Date.now() - new Date(d.timestamp).getTime() < 60000) ? `<div class="diary-ai-response"><div style="display:flex;align-items:center;gap:6px;">${getMascotSmallHTML('正在回应你...')}</div></div>` : ''))}
+        ${contentHtml}
+        ${responseHtml}
       </div>`;
     });
     html += `</div>`;
@@ -4649,19 +4742,20 @@ function renderDiaryList() {
     });
   });
 
-  // 绑定夸夸折叠按钮
+  // 绑定夸夸/晚安折叠按钮
   container.querySelectorAll('.diary-praise-toggle').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = btn.dataset.id;
+      const label = btn.dataset.label || '夸夸';
       const content = container.querySelector(`.diary-praise-content[data-id="${id}"]`);
       if (content) {
         if (content.style.display === 'none') {
           content.style.display = 'block';
-          btn.textContent = '📖 收起夸夸';
+          btn.textContent = `📖 收起${label}`;
         } else {
           content.style.display = 'none';
-          btn.textContent = '📖 查看夸夸';
+          btn.textContent = `📖 查看${label}`;
         }
       }
     });
@@ -4757,7 +4851,7 @@ function saveManualDiary() {
       entry.text = content;
       entry.moodTag = moodTag;
     }
-    saveData(data);
+    saveDataSync(data); // 同步落盘，保证下方立即执行的 renderDiaryList 读到最新内容
     showToast('日记已更新 ✨', 'success');
     closeDiaryEditor();
     renderDiaryList();
@@ -4777,7 +4871,7 @@ function saveManualDiary() {
         text: content, content: content, moodTag: moodTag,
         timestamp: new Date().toISOString(),
       }];
-      saveData(data);
+      saveDataSync(data); // 同步落盘，保证下方立即执行的 renderDiaryList 读到最新内容
       showToast('日记已保存 ✨', 'success');
       closeDiaryEditor();
       renderDiaryList();
